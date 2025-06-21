@@ -45,6 +45,12 @@
                 <option>Phoenix, USA</option>
                 <option>London, UK</option>
                 <option>Mumbai, India</option>
+                <option>Tokyo, Japan</option>
+                <option>Cairo, Egypt</option>
+                <option>New York, USA</option>
+                <option>Rio de Janeiro, Brazil</option>
+                <option>Sydney, Australia</option>
+                <option>Moscow, Russia</option>
             </select>
         </div>
         
@@ -142,6 +148,18 @@
                      weatherSystem.timeline = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 8000 }, { types: new Set(['altostratus', 'cumulus']), duration: 6000 }, ];
                 } else if (location.includes('mumbai')) {
                      weatherSystem.timeline = [ { types: new Set(['cumulonimbus']), rain: true, duration: 8000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
+                } else if (location.includes('tokyo')) {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus', 'altocumulus']), duration: 7000 }, { types: new Set(['cumulus']), duration: 7000 }, ];
+                } else if (location.includes('cairo')) {
+                    weatherSystem.timeline = [ { types: new Set([]), duration: 12000 }, { types: new Set(['cirrus']), duration: 3000 }, ];
+                } else if (location.includes('new york')) {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 4000 }, { types: new Set(['cumulus', 'altocumulus']), duration: 6000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, ];
+                } else if (location.includes('rio de janeiro')) {
+                    weatherSystem.timeline = [ { types: new Set(['cumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 3000 }, ];
+                } else if (location.includes('sydney')) {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus', 'cumulus']), duration: 9000 }, { types: new Set(['altocumulus']), duration: 5000 }, ];
+                } else if (location.includes('moscow')) {
+                    weatherSystem.timeline = [ { types: new Set(['stratus', 'altostratus']), duration: 9000 }, { types: new Set(['nimbostratus']), rain: true, duration: 4000 }, ];
                 } else {
                      weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulus']), duration: 10000 }, ];
                 }

@@ -207,7 +207,7 @@
             }
             const location = controls.liveLocation.value;
             controls.status.textContent = `Fetching weather for ${location}...`;
-            controls.status.style.color = 'inherit';
+            controls.status.style.color = ''; // Reset color to let CSS class take over
             controls.liveDataDisplay.innerHTML = '';
             
             const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/today?unitGroup=metric&include=current&key=${API_KEY}&contentType=json`;

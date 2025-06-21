@@ -18,35 +18,55 @@
         }
         .control-group { margin-bottom: 15px; }
         label { display: block; font-weight: 500; margin-bottom: 5px; color: #374151; }
-        .checkbox-label { display: flex; align-items: center; color: #374151; margin-bottom: 8px; font-weight: normal;}
-        .checkbox-label input { margin-right: 8px; }
+        input[type="text"], select { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB; color: #374151;}
+        input:disabled, select:disabled { background-color: #e5e7eb; cursor: not-allowed; }
     </style>
 </head>
 <body class="bg-gray-900 text-white">
 
     <canvas id="cloudCanvas"></canvas>
+    <canvas id="cloudBuffer" class="hidden"></canvas>
 
     <div class="controls">
         <h2 class="text-xl font-bold mb-4 text-gray-800">Meteorologist Options</h2>
+        
+        <div class="control-group">
+            <label for="simMode">Simulation Mode</label>
+            <select id="simMode" class="text-gray-900">
+                <option value="location">Location</option>
+                <option value="front">Weather Front</option>
+            </select>
+        </div>
 
-        <div id="cloudTypeSelector" class="control-group">
-            <label>Cloud Types</label>
-            <div class="grid grid-cols-2 gap-x-4">
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cumulus" checked> Cumulus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="stratus"> Stratus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cirrus"> Cirrus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cumulonimbus"> Cumulonimbus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cirrocumulus"> Cirrocumulus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cirrostratus"> Cirrostratus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="altocumulus"> Altocumulus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="altostratus"> Altostratus</label>
-                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="nimbostratus"> Nimbostratus</label>
-            </div>
+        <div id="locationControl" class="control-group">
+            <label for="location">Location</label>
+            <select id="location" class="text-gray-900">
+                <option>Auckland, New Zealand</option>
+                <option>Phoenix, USA</option>
+                <option>London, UK</option>
+                <option>Mumbai, India</option>
+            </select>
+        </div>
+        
+        <div id="frontControl" class="control-group hidden">
+            <label for="frontType">Front Type</label>
+            <select id="frontType" class="text-gray-900">
+                <option value="maritime">Temperate Maritime Front</option>
+                <option value="cold">Classic Cold Front</option>
+                <option value="monsoon">Monsoon Trough</option>
+                <option value="arctic">Arctic Outbreak</option>
+                <option value="fog">Coastal Fog</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="weatherSpeed">Weather Progression Speed</label>
+            <input type="range" id="weatherSpeed" min="0.00005" max="0.001" value="0.0001" step="0.00001" class="w-full">
         </div>
 
         <div class="control-group">
             <label for="windSpeed">Wind Speed</label>
-            <input type="range" id="windSpeed" min="-3" max="3" value="0.5" step="0.1" class="w-full">
+            <input type="range" id="windSpeed" min="-3" max="3" value="0.8" step="0.1" class="w-full">
         </div>
         
         <div class="control-group">
@@ -62,10 +82,20 @@
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        
+        const cloudBuffer = document.createElement('canvas');
+        const bufferCtx = cloudBuffer.getContext('2d');
+        cloudBuffer.width = canvas.width;
+        cloudBuffer.height = canvas.height;
 
         // --- DOM Element References ---
         const controls = {
-            typeSelector: document.getElementById('cloudTypeSelector'),
+            simMode: document.getElementById('simMode'),
+            locationControl: document.getElementById('locationControl'),
+            frontControl: document.getElementById('frontControl'),
+            location: document.getElementById('location'),
+            frontType: document.getElementById('frontType'),
+            weatherSpeed: document.getElementById('weatherSpeed'),
             speed: document.getElementById('windSpeed'),
             timeOfDay: document.getElementById('timeOfDay'),
         };
@@ -74,290 +104,120 @@
         let time = 0;
         const simplex = new SimplexNoise();
         let particles = [];
-        let activeCloudTypes = new Set(['cumulus']);
         const lighting = { sunAngle: Math.PI / 4, sunColor: {r:255, g:255, b:255}, ambientColor: {r:100, g:120, b:150}};
+        let weatherSystem = { timeline: [], progress: 0, activeClouds: new Map() };
+        const ALTITUDE = { HIGH_TOP: 0, HIGH_BASE: 0.35, MID_TOP: 0.35, MID_BASE: 0.65, LOW_TOP: 0.65, LOW_BASE: 1.0, };
 
-        // --- Altitude Constants ---
-        const ALTITUDE = {
-            HIGH_TOP: 0,       HIGH_BASE: 0.35,
-            MID_TOP: 0.35,     MID_BASE: 0.65,
-            LOW_TOP: 0.65,     LOW_BASE: 1.0,
-        };
-
-        // --- Particle Class (acts as a cloud "core") ---
         class Particle {
-            constructor(type) {
-                this.type = type;
-                this.reset();
-                this.texture = null; // To cache the generated cloud texture
-            }
-            reset() {
-                this.x = Math.random() * canvas.width;
-                this.setAltitude();
-                this.extra = { 
-                    radius: 50 + Math.random() * 80,
-                    // Unique seed for this particle's noise generation
-                    seed: { x: Math.random() * 1000, y: Math.random() * 1000, z: Math.random() * 1000}
-                };
-                 if(this.type === 'rain') {
-                    this.y = Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height + ALTITUDE.LOW_TOP * canvas.height;
-                    this.extra.speed = Math.random() * 5 + 5;
-                }
-            }
-            setAltitude(){
-                 switch (this.type) {
-                    case 'cirrus': case 'cirrocumulus': case 'cirrostratus':
-                        this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height;
-                        break;
-                    case 'altocumulus': case 'altostratus':
-                        this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height;
-                        break;
-                    case 'cumulus': case 'stratus': case 'nimbostratus':
-                        this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height;
-                        break;
-                    case 'cumulonimbus':
-                        this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height;
-                        break;
-                    default:
-                        this.y = Math.random() * canvas.height;
-                }
-            }
-            update() {
-                if(this.type === 'rain') {
-                    this.y += this.extra.speed;
-                    this.x += parseFloat(controls.speed.value) * 0.5;
-                    if(this.y > canvas.height) this.reset();
-                    return;
-                }
-                
-                const wind = parseFloat(controls.speed.value);
-                let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time);
-                let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100);
-                let windFactor = 1;
-                
-                switch (this.type) {
-                    case 'cirrus': case 'cirrocumulus': case 'cirrostratus': windFactor = 2; break;
-                    case 'altostratus': case 'stratus': case 'nimbostratus': windFactor = 0.7; break;
-                }
-
-                this.x += (wind * windFactor) + noiseX;
-                if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) {
-                    this.y += noiseY * 0.5;
-                }
-
-                if (this.x > canvas.width + 250) this.x = -250;
-                if (this.x < -250) this.x = canvas.width + 250;
-                if (this.y > canvas.height + 250 || this.y < -250) this.setAltitude();
-            }
+            constructor(type) { this.type = type; this.reset(); this.texture = null; }
+            reset() { this.x = Math.random() * canvas.width; this.setAltitude(); this.extra = { radius: 50 + Math.random() * 80, seed: { x: Math.random() * 1000, y: Math.random() * 1000, z: Math.random() * 1000} }; if(this.type === 'rain') { this.y = Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height + ALTITUDE.LOW_TOP * canvas.height; this.extra.speed = Math.random() * 5 + 5; } }
+            setAltitude(){ switch (this.type) { case 'cirrus': this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height; break; case 'altocumulus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height; break; case 'cumulus': this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height; break; case 'cumulonimbus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height; break; default: this.y = Math.random() * canvas.height; } }
+            update() { if(this.type === 'rain') { this.y += this.extra.speed; this.x += parseFloat(controls.speed.value) * 0.5; if(this.y > canvas.height) this.reset(); return; } const wind = parseFloat(controls.speed.value); let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time); let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100); let windFactor = 1; switch (this.type) { case 'cirrus': windFactor = 2; break; } this.x += (wind * windFactor) + noiseX; if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) { this.y += noiseY * 0.5; } if (this.x > canvas.width + 250) this.x = -250; if (this.x < -250) this.x = canvas.width + 250; if (this.y > canvas.height + 250 || this.y < -250) this.setAltitude(); }
         }
         
-        // --- Drawing Logic ---
-        function updateLighting() {
-            const timeValue = parseFloat(controls.timeOfDay.value);
-            lighting.sunAngle = (1 - timeValue) * Math.PI;
-            
-            const noon = { r: 255, g: 255, b: 255 };
-            const sunset = { r: 255, g: 170, b: 100 };
-            const twilight = { r: 40, g: 50, b: 100 };
+        function setupWeatherSystem() {
+            weatherSystem.progress = 0;
+            const mode = controls.simMode.value;
 
-            const sunHeight = Math.sin(lighting.sunAngle);
-            
-            if(sunHeight > 0){
-                 const mix = Math.pow(sunHeight, 0.7);
-                 lighting.sunColor.r = sunset.r * (1 - mix) + noon.r * mix;
-                 lighting.sunColor.g = sunset.g * (1 - mix) + noon.g * mix;
-                 lighting.sunColor.b = sunset.b * (1 - mix) + noon.b * mix;
-
-                 lighting.ambientColor.r = twilight.r * (1 - mix) + 120 * mix;
-                 lighting.ambientColor.g = twilight.g * (1 - mix) + 140 * mix;
-                 lighting.ambientColor.b = twilight.b * (1 - mix) + 180 * mix;
-            } else {
-                lighting.sunColor = {r:10, g:10, b:20};
-                lighting.ambientColor = twilight;
+            if (mode === 'front') {
+                const front = controls.frontType.value;
+                if (front === 'maritime') {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 2000 }, { types: new Set(['cirrus', 'cirrostratus']), duration: 3000 }, { types: new Set(['altostratus', 'altocumulus']), duration: 4000 }, { types: new Set(['nimbostratus', 'cumulonimbus']), rain: true, duration: 5000 }, { types: new Set(['cumulus', 'stratus']), duration: 4000 }, { types: new Set(['cirrus']), duration: 3000 }, { types: new Set([]), duration: 2000 }, ];
+                } else if (front === 'cold') {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 1000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
+                } else if (front === 'monsoon') {
+                     weatherSystem.timeline = [ { types: new Set(['cumulonimbus', 'nimbostratus']), rain: true, duration: 10000 }, ];
+                } else if (front === 'arctic') {
+                     weatherSystem.timeline = [ { types: new Set(['cirrus', 'cirrostratus']), duration: 8000 }, { types: new Set([]), duration: 4000 }, ];
+                } else if (front === 'fog') {
+                     weatherSystem.timeline = [ { types: new Set(['stratus']), duration: 6000 }, { types: new Set([]), duration: 4000 }, ];
+                }
+            } else { // location mode
+                const location = controls.location.value.toLowerCase();
+                if (location.includes('auckland')) {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus', 'cumulus']), duration: 10000 }, { types: new Set(['cumulus', 'altocumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1500}, ];
+                } else if (location.includes('phoenix')) {
+                     weatherSystem.timeline = [ { types: new Set([]), duration: 10000 }, { types: new Set(['cirrus']), duration: 5000 }, ];
+                } else if (location.includes('london')) {
+                     weatherSystem.timeline = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 8000 }, { types: new Set(['altostratus', 'cumulus']), duration: 6000 }, ];
+                } else if (location.includes('mumbai')) {
+                     weatherSystem.timeline = [ { types: new Set(['cumulonimbus']), rain: true, duration: 8000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
+                } else {
+                     weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulus']), duration: 10000 }, ];
+                }
             }
+            updateActiveClouds();
         }
+        
+        function updateWeather(deltaTime) { weatherSystem.progress += deltaTime * parseFloat(controls.weatherSpeed.value); const totalDuration = weatherSystem.timeline.reduce((sum, stage) => sum + stage.duration, 0); if (totalDuration > 0 && weatherSystem.progress > totalDuration) { weatherSystem.progress %= totalDuration; } updateActiveClouds(); }
+        function updateActiveClouds() { let currentTime = 0; let currentStage = null; let nextStage = null; let timeIntoStage = 0; if (weatherSystem.timeline.length === 0) return; for(let i=0; i< weatherSystem.timeline.length; i++) { const stage = weatherSystem.timeline[i]; if(currentTime + stage.duration > weatherSystem.progress) { currentStage = stage; nextStage = weatherSystem.timeline[(i + 1) % weatherSystem.timeline.length]; timeIntoStage = weatherSystem.progress - currentTime; break; } currentTime += stage.duration; } const transitionDuration = 1000; const allTypes = new Set([...(currentStage ? currentStage.types : []), ...(nextStage ? nextStage.types : [])]); weatherSystem.activeClouds.clear(); allTypes.forEach(type => { const inCurrent = currentStage && currentStage.types.has(type); const inNext = nextStage && nextStage.types.has(type); let density = 0; if (inCurrent && !inNext) { density = 1.0 - Math.min(1, timeIntoStage / transitionDuration); } else if (!inCurrent && inNext) { density = Math.min(1, Math.max(0, timeIntoStage - (currentStage.duration - transitionDuration)) / transitionDuration); } else if (inCurrent && inNext) { density = 1.0; } if (density > 0) { weatherSystem.activeClouds.set(type, density); } }); }
+        function updateLighting() { const timeValue = parseFloat(controls.timeOfDay.value); lighting.sunAngle = (1 - timeValue) * Math.PI; const noon = { r: 255, g: 255, b: 255 }; const sunset = { r: 255, g: 170, b: 100 }; const twilight = { r: 40, g: 50, b: 100 }; const sunHeight = Math.sin(lighting.sunAngle); if(sunHeight > 0){ const mix = Math.pow(sunHeight, 0.7); lighting.sunColor.r = sunset.r * (1 - mix) + noon.r * mix; lighting.sunColor.g = sunset.g * (1 - mix) + noon.g * mix; lighting.sunColor.b = sunset.b * (1 - mix) + noon.b * mix; lighting.ambientColor.r = twilight.r * (1-mix) + 120 * mix; lighting.ambientColor.g = twilight.g * (1-mix) + 140 * mix; lighting.ambientColor.b = twilight.b * (1-mix) + 180 * mix; } else { lighting.sunColor = {r:10,g:10,b:20}; lighting.ambientColor = twilight; } }
 
         function drawScene() {
             updateLighting();
-            ctx.globalCompositeOperation = 'source-over';
-            
-            // Draw dynamic sky
             const sunX = canvas.width / 2 - Math.cos(lighting.sunAngle) * canvas.width * 0.6;
             const sunY = canvas.height * 1.2 - Math.sin(lighting.sunAngle) * canvas.height * 1.2;
-            const skyGradient = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, canvas.width * 1.8);
-            const sunHeight = Math.sin(lighting.sunAngle);
-            
-            const topSky = {r: 58, g: 99, b: 138};
-            const horizonSky = {r: 138, g: 182, b: 224};
-            const twilightSky = {r: 10, g: 20, b: 40};
-            
-            if(sunHeight > 0.05) {
-                 const mix = Math.pow(sunHeight, 0.5);
-                 const r = (twilightSky.r * (1-mix) + horizonSky.r * mix);
-                 const g = (twilightSky.g * (1-mix) + horizonSky.g * mix);
-                 const b = (twilightSky.b * (1-mix) + horizonSky.b * mix);
-                 skyGradient.addColorStop(0, `rgb(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b})`);
-                 skyGradient.addColorStop(0.05, `rgb(${r}, ${g}, ${b})`);
-                 skyGradient.addColorStop(0.6, `rgb(${topSky.r}, ${topSky.g}, ${topSky.b})`);
-            } else {
-                 skyGradient.addColorStop(0, `rgb(${twilightSky.r}, ${twilightSky.g}, ${twilightSky.b})`);
-            }
-            
-            ctx.fillStyle = skyGradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+            ctx.globalCompositeOperation = 'source-over';
+            drawSky(ctx, sunX, sunY);
+            drawHalos(ctx, sunX, sunY);
+            bufferCtx.clearRect(0, 0, canvas.width, canvas.height);
             particles.sort((a,b) => a.y - b.y);
+            drawSheetClouds(bufferCtx);
+            for (const p of particles) { drawParticle(p, bufferCtx); }
+            drawCrepuscularRays(ctx, sunX, sunY);
+            ctx.drawImage(cloudBuffer, 0, 0);
+            particles.forEach(p => { if (p.type === 'rain') drawParticle(p, ctx) });
+        }
 
-            // Draw sheet clouds first
-            drawSheetClouds();
-            
-            // Draw individual particles
-            for (const p of particles) {
-                drawParticle(p);
-            }
+        function drawSky(targetCtx, sunX, sunY) { const sunHeight = Math.sin(lighting.sunAngle); const topSky = {r: 58, g: 99, b: 138}; const horizonSky = {r: 138, g: 182, b: 224}; const twilightSky = {r: 10, g: 20, b: 40}; const skyGradient = targetCtx.createRadialGradient(sunX, sunY, 0, sunX, sunY, canvas.width * 1.8); if(sunHeight > 0.05) { const mix = Math.pow(sunHeight, 0.5); const r = (twilightSky.r * (1-mix) + horizonSky.r * mix); const g = (twilightSky.g * (1-mix) + horizonSky.g * mix); const b = (twilightSky.b * (1-mix) + horizonSky.b * mix); skyGradient.addColorStop(0, `rgb(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b})`); skyGradient.addColorStop(0.05, `rgb(${r}, ${g}, ${b})`); skyGradient.addColorStop(0.6, `rgb(${topSky.r}, ${topSky.g}, ${topSky.b})`); } else { skyGradient.addColorStop(0, `rgb(${twilightSky.r}, ${twilightSky.g}, ${twilightSky.b})`); } targetCtx.fillStyle = skyGradient; targetCtx.fillRect(0, 0, canvas.width, canvas.height); }
+        function drawCrepuscularRays(targetCtx, sunX, sunY) { const sunHeight = Math.sin(lighting.sunAngle); if (sunHeight > 0.6 || sunHeight < 0) return; const numRays = 70; targetCtx.save(); targetCtx.globalCompositeOperation = 'lighter'; for (let i = 0; i < numRays; i++) { const angle = (i / numRays) * Math.PI * 2; const length = canvas.width * 1.5; const endX = sunX + Math.cos(angle) * length; const endY = sunY + Math.sin(angle) * length; const rayGradient = targetCtx.createLinearGradient(sunX, sunY, endX, endY); const rayStrength = (Math.pow(1 - sunHeight, 3)) * (simplex.noise2D(i, time*0.1) * 0.5 + 0.5) * 0.1; rayGradient.addColorStop(0, `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, ${rayStrength})`); rayGradient.addColorStop(0.2, `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, 0)`); targetCtx.strokeStyle = rayGradient; targetCtx.lineWidth = Math.random() * 20 + 5; targetCtx.beginPath(); targetCtx.moveTo(sunX, sunY); targetCtx.lineTo(endX, endY); targetCtx.stroke(); } targetCtx.restore(); }
+        function generateCloudTexture(particle, width, height) { const bufferCanvas = document.createElement('canvas'); bufferCanvas.width = width; bufferCanvas.height = height; const bufferCtx = bufferCanvas.getContext('2d'); const bufferData = bufferCtx.createImageData(width, height); const data = bufferData.data; const sunVecX = Math.cos(lighting.sunAngle); const sunVecY = -Math.sin(lighting.sunAngle); for(let y = 0; y < height; y++){ for(let x = 0; x < width; x++){ const i = (y * width + x) * 4; const u = x / width; const v = y / height; const u2 = u - 0.5; const v2 = v - 0.5; let dist = u2 * u2 + v2 * v2; if(dist > 0.25) continue; let density = simplex.noise3D(particle.extra.seed.x + u * 4, particle.extra.seed.y + v * 4, particle.extra.seed.z + time * 0.1) * 0.6; density += simplex.noise3D(particle.extra.seed.x + u * 8, particle.extra.seed.y + v * 8, particle.extra.seed.z + time * 0.1) * 0.3; density += simplex.noise3D(particle.extra.seed.x + u * 16, particle.extra.seed.y + v * 16, particle.extra.seed.z + time * 0.1) * 0.1; density -= dist * 2.0; if(density <= 0) continue; const alpha = density * 255; const lightAngle = (sunVecX * u2 + sunVecY * v2) * 2.0; const directLight = Math.max(0, lightAngle) * 1.5; const ambient = 1.0; let r = lighting.ambientColor.r * ambient + lighting.sunColor.r * directLight; let g = lighting.ambientColor.g * ambient + lighting.sunColor.g * directLight; let b = lighting.ambientColor.b * ambient + lighting.sunColor.b * directLight; data[i] = r; data[i+1] = g; data[i+2] = b; data[i+3] = alpha; }} bufferCtx.putImageData(bufferData, 0, 0); return bufferCanvas; }
+        function drawParticle(p, targetCtx) { const density = weatherSystem.activeClouds.get(p.type) || 0; if (density === 0) return; targetCtx.globalAlpha = 0.85 * density; switch (p.type) { case 'cumulus': case 'altocumulus': case 'cumulonimbus': if (!p.texture) { const size = p.type === 'cumulonimbus' ? p.extra.radius * 4 : p.extra.radius * 2.5; p.texture = generateCloudTexture(p, Math.floor(size), Math.floor(size)); } targetCtx.drawImage(p.texture, p.x - p.texture.width/2, p.y - p.texture.height/2); break; case 'rain': targetCtx.strokeStyle = `rgba(${lighting.ambientColor.r + 20}, ${lighting.ambientColor.g + 20}, ${lighting.ambientColor.b + 20}, 0.7)`; targetCtx.lineWidth = 1; targetCtx.beginPath(); targetCtx.moveTo(p.x, p.y); targetCtx.lineTo(p.x, p.y + 10); targetCtx.stroke(); break; case 'cirrus': const noise = simplex.noise3D(p.x / 300, p.y / 300, time + p.extra.seed.z); if (noise < 0.6) return; targetCtx.strokeStyle = `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, ${(noise - 0.6) * 0.4})`; targetCtx.lineWidth = noise * 1.5; targetCtx.beginPath(); const hook = (noise - 0.5) * 200; targetCtx.moveTo(p.x - hook, p.y); targetCtx.quadraticCurveTo(p.x, p.y - hook * 0.3, p.x + hook, p.y); targetCtx.stroke(); break; } targetCtx.globalAlpha = 1.0; }
+        function drawSheetClouds(targetCtx) { targetCtx.save(); const types = ['cirrostratus', 'altostratus', 'stratus', 'nimbostratus']; types.forEach(type => { const density = weatherSystem.activeClouds.get(type) || 0; if(density > 0) { let alpha = 0; if (type === 'cirrostratus') alpha = 0.2; if (type === 'altostratus') alpha = 0.4; if (type === 'stratus') alpha = 0.6; if (type === 'nimbostratus') alpha = 0.8; const veilNoise = (simplex.noise2D(time * 0.1, 0) + 1) / 2 * 0.2 + 0.8; const r = lighting.ambientColor.r * 0.8; const g = lighting.ambientColor.g * 0.8; const b = lighting.ambientColor.b * 0.8; targetCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * veilNoise * density})`; targetCtx.fillRect(0, 0, canvas.width, canvas.height); } }); targetCtx.restore(); }
+        
+        function drawHalos(targetCtx, sunX, sunY) { const density = weatherSystem.activeClouds.get('cirrostratus') || 0; const sunHeight = Math.sin(lighting.sunAngle); if (density === 0 || sunHeight < 0.1) return; targetCtx.save(); targetCtx.globalCompositeOperation = 'lighter'; const haloRadius = canvas.height * 0.2; const haloGradient = targetCtx.createRadialGradient(sunX, sunY, haloRadius - 10, sunX, sunY, haloRadius + 10); haloGradient.addColorStop(0, 'rgba(0,0,0,0)'); haloGradient.addColorStop(0.5, `rgba(${Math.round(lighting.sunColor.r)}, ${Math.round(lighting.sunColor.g)}, ${Math.round(lighting.sunColor.b)}, ${0.5 * density})`); haloGradient.addColorStop(1, 'rgba(0,0,0,0)'); targetCtx.strokeStyle = haloGradient; targetCtx.lineWidth = 20; targetCtx.beginPath(); targetCtx.arc(sunX, sunY, haloRadius, 0, Math.PI * 2); targetCtx.stroke(); const dogAngle = Math.PI / 8; const dogX1 = sunX + Math.cos(dogAngle) * haloRadius; const dogY1 = sunY - Math.sin(dogAngle) * haloRadius; const dogX2 = sunX - Math.cos(dogAngle) * haloRadius; const dogY2 = sunY - Math.sin(dogAngle) * haloRadius; [ {x: dogX1, y: dogY1}, {x: dogX2, y: dogY2} ].forEach(pos => { const dogGrad = targetCtx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 30); dogGrad.addColorStop(0, `rgba(255,255,255, ${0.8 * density})`); dogGrad.addColorStop(1, `rgba(255,200,200, 0)`); targetCtx.fillStyle = dogGrad; targetCtx.beginPath(); targetCtx.arc(pos.x, pos.y, 30, 0, Math.PI * 2); targetCtx.fill(); }); targetCtx.restore(); }
+        
+        function init() {
+            setupWeatherSystem();
+            particles = [];
+            const typeCounts = { cumulus: 25, cirrus: 150, cumulonimbus: 10, altocumulus: 20 };
+            Object.keys(typeCounts).forEach(type => { for(let i=0; i < typeCounts[type]; i++){ particles.push(new Particle(type)); } });
+            for (let i = 0; i < 500; i++) particles.push(new Particle('rain'));
         }
         
-        function generateCloudTexture(particle, width, height) {
-            const bufferCanvas = document.createElement('canvas');
-            bufferCanvas.width = width;
-            bufferCanvas.height = height;
-            const bufferCtx = bufferCanvas.getContext('2d');
-            const bufferData = bufferCtx.createImageData(width, height);
-            const data = bufferData.data;
+        let lastTime = 0;
+        function animate(timestamp) {
+            if(!lastTime) lastTime = timestamp; // Fix for first frame NaN error
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
 
-            const sunVecX = Math.cos(lighting.sunAngle);
-            const sunVecY = -Math.sin(lighting.sunAngle);
-
-            for(let y = 0; y < height; y++){
-                for(let x = 0; x < width; x++){
-                    const i = (y * width + x) * 4;
-                    
-                    const u = x / width;
-                    const v = y / height;
-                    const u2 = u - 0.5;
-                    const v2 = v - 0.5;
-                    let dist = u2 * u2 + v2 * v2;
-                    if(dist > 0.25) continue;
-                    
-                    // Fractal noise
-                    let density = simplex.noise3D(particle.extra.seed.x + u * 4, particle.extra.seed.y + v * 4, particle.extra.seed.z + time * 0.1) * 0.6;
-                    density += simplex.noise3D(particle.extra.seed.x + u * 8, particle.extra.seed.y + v * 8, particle.extra.seed.z + time * 0.1) * 0.3;
-                    density += simplex.noise3D(particle.extra.seed.x + u * 16, particle.extra.seed.y + v * 16, particle.extra.seed.z + time * 0.1) * 0.1;
-                    
-                    // Shape and fade edges
-                    density -= dist * 2.0;
-                    if(density <= 0) continue;
-                    
-                    const alpha = density * 255;
-                    
-                    // Lighting
-                    const lightAngle = (sunVecX * u2 + sunVecY * v2) * 2.0;
-                    const directLight = Math.max(0, lightAngle) * 1.5;
-                    const ambient = 1.0;
-                    
-                    let r = lighting.ambientColor.r * ambient + lighting.sunColor.r * directLight;
-                    let g = lighting.ambientColor.g * ambient + lighting.sunColor.g * directLight;
-                    let b = lighting.ambientColor.b * ambient + lighting.sunColor.b * directLight;
-                    
-                    data[i] = r; data[i+1] = g; data[i+2] = b; data[i+3] = alpha;
-                }
-            }
-            bufferCtx.putImageData(bufferData, 0, 0);
-            return bufferCanvas;
-        }
-
-        function drawParticle(p) {
-            switch (p.type) {
-                 case 'cumulus': case 'altocumulus': case 'cumulonimbus':
-                     // Generate texture only once, then cache it
-                     if (!p.texture) {
-                         const size = p.type === 'cumulonimbus' ? p.extra.radius * 4 : p.extra.radius * 2.5;
-                         p.texture = generateCloudTexture(p, Math.floor(size), Math.floor(size));
-                     }
-                     ctx.globalAlpha = 0.85;
-                     ctx.drawImage(p.texture, p.x - p.texture.width/2, p.y - p.texture.height/2);
-                     ctx.globalAlpha = 1.0;
-                     break;
-                 case 'rain':
-                    ctx.strokeStyle = `rgba(${lighting.ambientColor.r + 20}, ${lighting.ambientColor.g + 20}, ${lighting.ambientColor.b + 20}, 0.7)`;
-                    ctx.lineWidth = 1;
-                    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y + 10); ctx.stroke();
-                    break;
-                 case 'cirrus':
-                    const noise = simplex.noise3D(p.x / 300, p.y / 300, time + p.extra.seed.z);
-                     if (noise < 0.6) return;
-                     ctx.strokeStyle = `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, ${(noise - 0.6) * 0.4})`;
-                     ctx.lineWidth = noise * 1.5;
-                     ctx.beginPath();
-                     const hook = (noise - 0.5) * 200;
-                     ctx.moveTo(p.x - hook, p.y);
-                     ctx.quadraticCurveTo(p.x, p.y - hook * 0.3, p.x + hook, p.y);
-                     ctx.stroke();
-                     break;
-            }
-        }
-
-        function drawSheetClouds() {
-            ctx.save();
-            ctx.globalAlpha = 0.4;
-            let veilAlpha = 0;
-            if (activeCloudTypes.has('cirrostratus')) veilAlpha = 0.1;
-            if (activeCloudTypes.has('altostratus')) veilAlpha += 0.3;
-            if (activeCloudTypes.has('stratus') || activeCloudTypes.has('nimbostratus')) veilAlpha += 0.5;
-            
-            if (veilAlpha > 0) {
-                const veilNoise = (simplex.noise2D(time * 0.1, 0) + 1) / 2 * 0.2 + 0.8;
-                const r = lighting.ambientColor.r * 0.8;
-                const g = lighting.ambientColor.g * 0.8;
-                const b = lighting.ambientColor.b * 0.8;
-                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${veilAlpha * veilNoise})`;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
-            ctx.restore();
-        }
-
-        function createLightning() { /* Unchanged */ }
-
-        function init() {
-            const checkedTypes = Array.from(document.querySelectorAll('input[name="cloud-type"]:checked')).map(cb => cb.value);
-            activeCloudTypes = new Set(checkedTypes);
-            particles = [];
-            // Reduced particle counts as each one is now a larger, more detailed cloud
-            const typeCounts = { cumulus: 25, stratus: 0, cirrus: 150, cumulonimbus: 10, cirrocumulus: 0, cirrostratus: 0, altocumulus: 20, altostratus: 0, nimbostratus: 0 };
-            
-            activeCloudTypes.forEach(type => {
-                const count = typeCounts[type] || 0;
-                for (let i = 0; i < count; i++) {
-                    particles.push(new Particle(type));
-                }
-            });
-
-            if (activeCloudTypes.has('nimbostratus') || activeCloudTypes.has('cumulonimbus')) {
-                for (let i = 0; i < 500; i++) particles.push(new Particle('rain'));
-            }
-        }
-
-        function animate() {
+            updateWeather(deltaTime || 0); // Ensure deltaTime is not NaN
             drawScene();
             particles.forEach(p => p.update());
-            createLightning(); 
             time += 0.002;
             requestAnimationFrame(animate);
         }
-
-        controls.typeSelector.addEventListener('change', init);
-        controls.timeOfDay.addEventListener('input', () => {
-            // Force redraw without waiting for next animation frame for responsive slider
-            drawScene();
-        }); 
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            init(); 
-        });
         
-        init();
-        animate();
+        function handleModeChange() {
+            const mode = controls.simMode.value;
+            if(mode === 'location') {
+                controls.locationControl.classList.remove('hidden');
+                controls.frontControl.classList.add('hidden');
+            } else {
+                controls.locationControl.classList.add('hidden');
+                controls.frontControl.classList.remove('hidden');
+            }
+            init();
+        }
+
+        controls.simMode.addEventListener('change', handleModeChange);
+        controls.location.addEventListener('change', init);
+        controls.frontType.addEventListener('change', init);
+        controls.timeOfDay.addEventListener('input', () => drawScene()); 
+        window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; cloudBuffer.width = canvas.width; cloudBuffer.height = canvas.height; init(); });
+        
+        handleModeChange();
+        requestAnimationFrame(animate);
     </script>
 </body>
 </html>

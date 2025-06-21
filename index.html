@@ -39,19 +39,37 @@
         </div>
 
         <div id="locationControl" class="control-group">
-            <label for="location">Location</label>
-            <select id="location" class="text-gray-900">
-                <option>Auckland, New Zealand</option>
-                <option>Phoenix, USA</option>
-                <option>London, UK</option>
-                <option>Mumbai, India</option>
-                <option>Tokyo, Japan</option>
-                <option>Cairo, Egypt</option>
-                <option>New York, USA</option>
-                <option>Rio de Janeiro, Brazil</option>
-                <option>Sydney, Australia</option>
-                <option>Moscow, Russia</option>
-            </select>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="location">Location</label>
+                    <select id="location" class="text-gray-900">
+                        <option>Auckland, New Zealand</option>
+                        <option>Christchurch, New Zealand</option>
+                        <option>Sydney, Australia</option>
+                        <option>Singapore</option>
+                        <option>Mumbai, India</option>
+                        <option>Tokyo, Japan</option>
+                        <option>London, UK</option>
+                        <option>Moscow, Russia</option>
+                        <option>Cairo, Egypt</option>
+                        <option>Cape Town, South Africa</option>
+                        <option>New York, USA</option>
+                        <option>Phoenix, USA</option>
+                        <option>Santa Barbara, USA</option>
+                        <option>Toronto, Canada</option>
+                        <option>Rio de Janeiro, Brazil</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="season">Season</label>
+                    <select id="season" class="text-gray-900">
+                        <option value="Winter">Winter</option>
+                        <option value="Spring">Spring</option>
+                        <option value="Summer">Summer</option>
+                        <option value="Autumn">Autumn</option>
+                    </select>
+                </div>
+            </div>
         </div>
         
         <div id="frontControl" class="control-group hidden">
@@ -59,6 +77,9 @@
             <select id="frontType" class="text-gray-900">
                 <option value="maritime">Temperate Maritime Front</option>
                 <option value="cold">Classic Cold Front</option>
+                <option value="warm">Classic Warm Front</option>
+                <option value="occluded">Occluded Front</option>
+                <option value="stationary">Stationary Front</option>
                 <option value="monsoon">Monsoon Trough</option>
                 <option value="arctic">Arctic Outbreak</option>
                 <option value="fog">Coastal Fog</option>
@@ -100,6 +121,7 @@
             locationControl: document.getElementById('locationControl'),
             frontControl: document.getElementById('frontControl'),
             location: document.getElementById('location'),
+            season: document.getElementById('season'),
             frontType: document.getElementById('frontType'),
             weatherSpeed: document.getElementById('weatherSpeed'),
             speed: document.getElementById('windSpeed'),
@@ -131,6 +153,12 @@
                     weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 2000 }, { types: new Set(['cirrus', 'cirrostratus']), duration: 3000 }, { types: new Set(['altostratus', 'altocumulus']), duration: 4000 }, { types: new Set(['nimbostratus', 'cumulonimbus']), rain: true, duration: 5000 }, { types: new Set(['cumulus', 'stratus']), duration: 4000 }, { types: new Set(['cirrus']), duration: 3000 }, { types: new Set([]), duration: 2000 }, ];
                 } else if (front === 'cold') {
                     weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 1000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
+                } else if (front === 'warm') {
+                    weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 2000 }, { types: new Set(['cirrostratus']), duration: 3000 }, { types: new Set(['altostratus']), duration: 4000 }, { types: new Set(['nimbostratus']), rain: true, duration: 5000 }, { types: new Set(['stratus']), duration: 3000 }, ];
+                } else if (front === 'occluded') {
+                     weatherSystem.timeline = [ { types: new Set(['cirrostratus']), duration: 3000 }, { types: new Set(['altostratus', 'nimbostratus']), rain: true, duration: 6000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, ];
+                } else if (front === 'stationary') {
+                     weatherSystem.timeline = [ { types: new Set(['altostratus', 'stratus']), duration: 12000 }, { types: new Set(['nimbostratus']), rain: true, duration: 4000 }, ];
                 } else if (front === 'monsoon') {
                      weatherSystem.timeline = [ { types: new Set(['cumulonimbus', 'nimbostratus']), rain: true, duration: 10000 }, ];
                 } else if (front === 'arctic') {
@@ -140,29 +168,40 @@
                 }
             } else { // location mode
                 const location = controls.location.value.toLowerCase();
-                if (location.includes('auckland')) {
-                    weatherSystem.timeline = [ { types: new Set(['cirrus', 'cumulus']), duration: 10000 }, { types: new Set(['cumulus', 'altocumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1500}, ];
-                } else if (location.includes('phoenix')) {
-                     weatherSystem.timeline = [ { types: new Set([]), duration: 10000 }, { types: new Set(['cirrus']), duration: 5000 }, ];
-                } else if (location.includes('london')) {
-                     weatherSystem.timeline = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 8000 }, { types: new Set(['altostratus', 'cumulus']), duration: 6000 }, ];
-                } else if (location.includes('mumbai')) {
-                     weatherSystem.timeline = [ { types: new Set(['cumulonimbus']), rain: true, duration: 8000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
-                } else if (location.includes('tokyo')) {
-                    weatherSystem.timeline = [ { types: new Set(['cirrus', 'altocumulus']), duration: 7000 }, { types: new Set(['cumulus']), duration: 7000 }, ];
-                } else if (location.includes('cairo')) {
-                    weatherSystem.timeline = [ { types: new Set([]), duration: 12000 }, { types: new Set(['cirrus']), duration: 3000 }, ];
-                } else if (location.includes('new york')) {
-                    weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 4000 }, { types: new Set(['cumulus', 'altocumulus']), duration: 6000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, ];
-                } else if (location.includes('rio de janeiro')) {
-                    weatherSystem.timeline = [ { types: new Set(['cumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 3000 }, ];
-                } else if (location.includes('sydney')) {
-                    weatherSystem.timeline = [ { types: new Set(['cirrus', 'cumulus']), duration: 9000 }, { types: new Set(['altocumulus']), duration: 5000 }, ];
-                } else if (location.includes('moscow')) {
-                    weatherSystem.timeline = [ { types: new Set(['stratus', 'altostratus']), duration: 9000 }, { types: new Set(['nimbostratus']), rain: true, duration: 4000 }, ];
-                } else {
-                     weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulus']), duration: 10000 }, ];
+                const season = controls.season.value;
+                
+                let timelines = {};
+                // Define timelines for each location
+                switch(location) {
+                    case 'auckland, new zealand':
+                        timelines.Winter = [ { types: new Set(['cirrus', 'cumulus']), duration: 10000 }, { types: new Set(['cumulus', 'altocumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1500}, ];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 9000 }, { types: new Set(['cirrus']), duration: 4000 }];
+                        break;
+                    case 'christchurch, new zealand':
+                        timelines.Winter = [ { types: new Set([]), duration: 6000 }, { types: new Set(['cirrus']), duration: 4000 }, { types: new Set(['stratus']), duration: 4000 }, ];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 8000 }, { types: new Set(['cirrus', 'altocumulus']), duration: 5000 } ];
+                        break;
+                    case 'phoenix, usa':
+                        timelines.Summer = [ { types: new Set([]), duration: 10000 }, { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1000 }, ];
+                        timelines.Winter = [ { types: new Set(['cirrostratus']), duration: 7000 }, { types: new Set(['altocumulus']), duration: 5000 } ];
+                        break;
+                    case 'london, uk':
+                        timelines.Winter = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 8000 }, { types: new Set(['altostratus', 'cumulus']), duration: 6000 }, ];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 7000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, { types: new Set(['cirrus']), duration: 4000 }, ];
+                        break;
+                    case 'singapore':
+                        timelines.Summer = timelines.Winter = [ { types: new Set(['cumulus']), duration: 5000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 5000 }, ];
+                        break;
+                    case 'cape town, south africa':
+                        timelines.Winter = [ { types: new Set(['cirrostratus']), duration: 4000 }, { types: new Set(['nimbostratus']), rain: true, duration: 6000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
+                        timelines.Summer = [ { types: new Set([]), duration: 9000 }, { types: new Set(['cirrus', 'cumulus']), duration: 4000 } ];
+                        break;
+                    // Add more location logic here...
+                    default:
+                        weatherSystem.timeline = [ { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulus']), duration: 10000 }, ];
                 }
+                // Fallback for seasons not explicitly defined for a location
+                weatherSystem.timeline = timelines[season] || timelines[Object.keys(timelines)[0]];
             }
             updateActiveClouds();
         }
@@ -230,6 +269,7 @@
 
         controls.simMode.addEventListener('change', handleModeChange);
         controls.location.addEventListener('change', init);
+        controls.season.addEventListener('change', init);
         controls.frontType.addEventListener('change', init);
         controls.timeOfDay.addEventListener('input', () => drawScene()); 
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; cloudBuffer.width = canvas.width; cloudBuffer.height = canvas.height; init(); });

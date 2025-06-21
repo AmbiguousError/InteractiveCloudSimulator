@@ -70,7 +70,7 @@
         let particles = [];
         let activeCloudTypes = new Set(['cumulus']);
 
-        // --- Altitude Constants (as percentage of canvas height) ---
+        // --- Altitude Constants ---
         const ALTITUDE = {
             HIGH_TOP: 0,       HIGH_BASE: 0.35,
             MID_TOP: 0.35,     MID_BASE: 0.65,
@@ -79,14 +79,15 @@
 
         // --- Particle Class ---
         class Particle {
-            constructor(type) {
+            constructor(type, core = null) {
                 this.type = type;
+                this.core = core; // The "center" of a larger cloud mass
                 this.reset();
             }
             reset() {
-                this.x = Math.random() * canvas.width;
+                this.x = this.core ? this.core.x + (Math.random() - 0.5) * 200 : Math.random() * canvas.width;
                 this.setAltitude();
-                this.extra = {}; // For type-specific data like radius, velocity
+                this.extra = {}; 
                  if(this.type === 'rain') {
                     this.y = Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height + ALTITUDE.LOW_TOP * canvas.height;
                     this.extra.speed = Math.random() * 5 + 5;
@@ -95,23 +96,22 @@
             setAltitude(){
                  switch (this.type) {
                     case 'cirrus': case 'cirrocumulus': case 'cirrostratus':
-                        this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height;
+                        this.y = this.core ? this.core.y + (Math.random() - 0.5) * 50 : ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height;
                         break;
                     case 'altocumulus': case 'altostratus':
-                        this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height;
+                        this.y = this.core ? this.core.y + (Math.random() - 0.5) * 100 : ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height;
                         break;
                     case 'cumulus': case 'stratus': case 'nimbostratus':
-                        this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height;
+                        this.y = this.core ? this.core.y + (Math.random() - 0.5) * 150 : ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height;
                         break;
-                    case 'cumulonimbus': // Spans all altitudes
-                        this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height;
+                    case 'cumulonimbus':
+                        this.y = this.core ? this.core.y + (Math.random() - 0.5) * 300 : ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height;
                         break;
                     default:
                         this.y = Math.random() * canvas.height;
                 }
             }
             update() {
-                // Handle rain separately
                 if(this.type === 'rain') {
                     this.y += this.extra.speed;
                     this.x += parseFloat(controls.speed.value) * 0.5;
@@ -120,16 +120,19 @@
                 }
                 
                 const wind = parseFloat(controls.speed.value);
-                let noiseX = 0, noiseY = 0;
+                let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time);
+                let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100);
                 let windFactor = 1;
+
+                if (this.core) { // Move towards the core to form clusters
+                    this.x += (this.core.x - this.x) * 0.001;
+                    this.y += (this.core.y - this.y) * 0.001;
+                }
 
                 switch (this.type) {
                     case 'cirrus': case 'cirrocumulus': case 'cirrostratus': windFactor = 2; break;
                     case 'altostratus': case 'stratus': case 'nimbostratus': windFactor = 0.7; break;
                 }
-
-                noiseX = simplex.noise3D(this.x / 800, this.y / 800, time);
-                noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100);
 
                 this.x += (wind * windFactor) + noiseX;
                 if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) {
@@ -146,20 +149,18 @@
         function drawScene() {
             ctx.globalCompositeOperation = 'source-over';
             const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            skyGradient.addColorStop(0, '#3A638A'); // High altitude
-            skyGradient.addColorStop(ALTITUDE.MID_TOP, '#6599C2'); // Mid altitude
-            skyGradient.addColorStop(ALTITUDE.LOW_TOP, '#8AB6E0'); // Low altitude
+            skyGradient.addColorStop(0, '#3A638A');
+            skyGradient.addColorStop(ALTITUDE.MID_TOP, '#6599C2');
+            skyGradient.addColorStop(ALTITUDE.LOW_TOP, '#8AB6E0');
             ctx.fillStyle = skyGradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.globalCompositeOperation = 'lighter';
             
-            // Draw clouds first
             for (const p of particles) {
                  if (p.type !== 'rain') drawParticle(p);
             }
 
-            // Draw precipitation on top
             ctx.globalCompositeOperation = 'source-over';
             for (const p of particles) {
                  if (p.type === 'rain') drawParticle(p);
@@ -169,8 +170,7 @@
         function drawParticle(p) {
             const noise = simplex.noise3D(p.x / 300, p.y / 300, time + 200);
             switch (p.type) {
-                case 'cumulus':
-                case 'altocumulus':
+                case 'cumulus': case 'altocumulus':
                     let baseRadius = p.type === 'cumulus' ? 60 : 30;
                     if (noise < 0.3) return;
                     const radius = noise * baseRadius;
@@ -182,47 +182,57 @@
                     break;
                 case 'cumulonimbus':
                     if (noise < 0.2) return;
-                    // Make clouds darker at the base for a more realistic, ominous look.
                     const cloudAltitudeSpan = (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height;
                     const relativePosInCloud = (p.y - ALTITUDE.MID_TOP * canvas.height) / cloudAltitudeSpan;
                     const darkness = Math.max(0, Math.min(1, relativePosInCloud));
-                    const r = 220 - 140 * darkness;
-                    const g = 220 - 140 * darkness;
-                    const b = 225 - 130 * darkness;
+                    const r = 220 - 160 * darkness;
+                    const g = 220 - 160 * darkness;
+                    const b = 225 - 150 * darkness;
                     const color = `${r}, ${g}, ${b}`;
 
-                    const cnbRadius = noise * 120;
-                    const cnbGrad = ctx.createRadialGradient(p.x, p.y, cnbRadius * 0.2, p.x, p.y, cnbRadius);
-                    cnbGrad.addColorStop(0, `rgba(${color}, ${noise * 0.5})`);
+                    // Anvil top simulation
+                    let cnbRadiusY = noise * 120;
+                    let cnbRadiusX = cnbRadiusY;
+                    if (p.y < ALTITUDE.MID_TOP * canvas.height + 50) { // If in the upper part
+                        cnbRadiusX *= 1.5 + (1 - relativePosInCloud); // Stretch horizontally
+                    }
+
+                    const cnbGrad = ctx.createRadialGradient(p.x, p.y, cnbRadiusX * 0.1, p.x, p.y, cnbRadiusX);
+                    cnbGrad.addColorStop(0, `rgba(${color}, ${noise * 0.6})`);
                     cnbGrad.addColorStop(1, `rgba(${color}, 0)`);
                     ctx.fillStyle = cnbGrad;
-                    ctx.beginPath(); ctx.arc(p.x, p.y, cnbRadius, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.ellipse(p.x, p.y, cnbRadiusX, cnbRadiusY, 0, 0, Math.PI * 2); ctx.fill();
                     break;
-                case 'stratus':
-                case 'nimbostratus':
-                    // Nimbostratus are darker rain clouds
-                    const sColor = p.type === 'stratus' ? '200, 200, 200' : '100, 110, 120';
+                case 'stratus': case 'nimbostratus':
+                    const sColor = p.type === 'stratus' ? '200, 200, 200' : '90, 100, 110';
                     if (noise < 0.5) return;
-                    ctx.fillStyle = `rgba(${sColor}, ${(noise - 0.5) * 0.3})`;
-                    ctx.fillRect(p.x - 100, p.y, 200, 3);
+                    ctx.fillStyle = `rgba(${sColor}, ${(noise - 0.5) * 0.4})`;
+                    ctx.beginPath();
+                    ctx.ellipse(p.x, p.y, noise * 150, noise * 2 + 1, 0, 0, Math.PI * 2);
+                    ctx.fill();
                     break;
                 case 'cirrus':
                     if (noise < 0.6) return;
-                    ctx.strokeStyle = `rgba(220, 220, 255, ${(noise - 0.6) * 0.5})`;
-                    ctx.lineWidth = 0.7;
-                    ctx.beginPath(); ctx.moveTo(p.x - (noise * 50), p.y); ctx.lineTo(p.x + (noise * 50), p.y); ctx.stroke();
+                    ctx.strokeStyle = `rgba(220, 220, 255, ${(noise - 0.6) * 0.6})`;
+                    ctx.lineWidth = noise * 1.5;
+                    ctx.beginPath();
+                    const hook = (noise - 0.5) * 200;
+                    ctx.moveTo(p.x - hook, p.y);
+                    ctx.quadraticCurveTo(p.x, p.y - hook * 0.2, p.x + hook, p.y);
+                    ctx.stroke();
                     break;
                 case 'cirrocumulus':
                      if (noise < 0.7) return;
+                     const rippleX = p.x + Math.sin(p.y / 20) * 20; // Create ripple pattern
                      ctx.fillStyle = `rgba(255, 255, 255, ${(noise - 0.7) * 0.8})`;
-                     ctx.beginPath(); ctx.arc(p.x, p.y, noise * 5, 0, Math.PI * 2); ctx.fill();
+                     ctx.beginPath(); ctx.arc(rippleX, p.y, noise * 6, 0, Math.PI * 2); ctx.fill();
                      break;
-                case 'cirrostratus':
-                case 'altostratus':
+                case 'cirrostratus': case 'altostratus':
                     const csColor = p.type === 'cirrostratus' ? '220, 220, 255' : '180, 190, 200';
-                    const csAlpha = p.type === 'cirrostratus' ? 0.005 : 0.01;
+                    const veilNoise = simplex.noise2D(time / 10, 0); // Slow, uniform noise
+                    const csAlpha = (p.type === 'cirrostratus' ? 0.005 : 0.01) + veilNoise * 0.002;
                     ctx.fillStyle = `rgba(${csColor}, ${csAlpha})`;
-                    ctx.fillRect(0, 0, canvas.width, canvas.height); // Veil effect
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
                     break;
                 case 'rain':
                     ctx.strokeStyle = 'rgba(150, 160, 170, 0.7)';
@@ -236,10 +246,10 @@
         function createLightning() {
             if (!activeCloudTypes.has('cumulonimbus') || Math.random() > 0.015) return;
 
-            const cbParticles = particles.filter(p => p.type === 'cumulonimbus');
+            const cbParticles = particles.filter(p => p.type === 'cumulonimbus' && p.y > ALTITUDE.MID_TOP * canvas.height + 50);
             if (cbParticles.length < 2) return;
 
-            const strikeType = Math.random() > 0.4 ? 'ground' : 'cloud'; // 60% chance for cloud-to-ground
+            const strikeType = Math.random() > 0.4 ? 'ground' : 'cloud';
             const startParticle = cbParticles[Math.floor(Math.random() * cbParticles.length)];
 
             ctx.save();
@@ -255,37 +265,22 @@
                 for (let i = 0; i < segments; i++) {
                     x += (Math.random() - 0.5) * 60;
                     y += Math.random() * (canvas.height / segments) * 1.5;
-                    if (y > canvas.height) {
-                        y = canvas.height;
-                        ctx.lineTo(x, y);
-                        break;
-                    }
+                    if (y > canvas.height) { y = canvas.height; ctx.lineTo(x, y); break; }
                     ctx.lineTo(x, y);
                 }
-            } else { // Cloud-to-cloud strike
+            } else { // Cloud-to-cloud
                 let endParticle;
-                do {
-                    endParticle = cbParticles[Math.floor(Math.random() * cbParticles.length)];
-                } while (endParticle === startParticle);
-
+                do { endParticle = cbParticles[Math.floor(Math.random() * cbParticles.length)]; } while (endParticle === startParticle);
                 const segments = 10;
                 for (let i = 0; i < segments; i++) {
                     const t = (i + 1) / segments;
-                    const targetX = startParticle.x + (endParticle.x - startParticle.x) * t;
-                    const targetY = startParticle.y + (endParticle.y - startParticle.y) * t;
-                    const offsetX = (Math.random() - 0.5) * 100;
-                    const offsetY = (Math.random() - 0.5) * 100;
-                    ctx.lineTo(targetX + offsetX, targetY + offsetY);
+                    ctx.lineTo(startParticle.x + (endParticle.x - startParticle.x) * t + (Math.random() - 0.5) * 100, startParticle.y + (endParticle.y - startParticle.y) * t + (Math.random() - 0.5) * 100);
                 }
                 ctx.lineTo(endParticle.x, endParticle.y);
             }
-            
             ctx.stroke();
-
-            // Create a flash effect
             ctx.fillStyle = `rgba(200, 200, 255, ${Math.random() * 0.3})`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             ctx.restore();
         }
 
@@ -294,11 +289,23 @@
             const checkedTypes = Array.from(document.querySelectorAll('input[name="cloud-type"]:checked')).map(cb => cb.value);
             activeCloudTypes = new Set(checkedTypes);
             particles = [];
-            const typeCounts = { cumulus: 150, stratus: 50, cirrus: 300, cumulonimbus: 100, cirrocumulus: 500, cirrostratus: 2, altocumulus: 200, altostratus: 2, nimbostratus: 50};
+            const typeCounts = { cumulus: 20, stratus: 100, cirrus: 300, cumulonimbus: 15, cirrocumulus: 500, cirrostratus: 2, altocumulus: 30, altostratus: 2, nimbostratus: 100 };
+            const clusterSizes = { cumulus: 10, altocumulus: 10, cumulonimbus: 20 };
 
             activeCloudTypes.forEach(type => {
-                for (let i = 0; i < (typeCounts[type] || 0); i++) {
-                    particles.push(new Particle(type));
+                const count = typeCounts[type] || 0;
+                if (clusterSizes[type]) {
+                    for (let i = 0; i < count; i++) {
+                        const core = new Particle(type);
+                        particles.push(core); // The core is also a particle
+                        for (let j = 0; j < clusterSizes[type]; j++) {
+                            particles.push(new Particle(type, core));
+                        }
+                    }
+                } else {
+                    for (let i = 0; i < count; i++) {
+                        particles.push(new Particle(type));
+                    }
                 }
             });
 

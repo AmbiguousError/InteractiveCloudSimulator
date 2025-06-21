@@ -88,7 +88,7 @@
                 this.setAltitude();
                 this.extra = {}; // For type-specific data like radius, velocity
                  if(this.type === 'rain') {
-                    this.y = Math.random() * canvas.height;
+                    this.y = Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height + ALTITUDE.LOW_TOP * canvas.height;
                     this.extra.speed = Math.random() * 5 + 5;
                 }
             }
@@ -182,7 +182,15 @@
                     break;
                 case 'cumulonimbus':
                     if (noise < 0.2) return;
-                    const color = p.y > canvas.height * 0.7 ? '100, 100, 110' : '200, 200, 210';
+                    // Make clouds darker at the base for a more realistic, ominous look.
+                    const cloudAltitudeSpan = (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height;
+                    const relativePosInCloud = (p.y - ALTITUDE.MID_TOP * canvas.height) / cloudAltitudeSpan;
+                    const darkness = Math.max(0, Math.min(1, relativePosInCloud));
+                    const r = 220 - 140 * darkness;
+                    const g = 220 - 140 * darkness;
+                    const b = 225 - 130 * darkness;
+                    const color = `${r}, ${g}, ${b}`;
+
                     const cnbRadius = noise * 120;
                     const cnbGrad = ctx.createRadialGradient(p.x, p.y, cnbRadius * 0.2, p.x, p.y, cnbRadius);
                     cnbGrad.addColorStop(0, `rgba(${color}, ${noise * 0.5})`);
@@ -192,6 +200,7 @@
                     break;
                 case 'stratus':
                 case 'nimbostratus':
+                    // Nimbostratus are darker rain clouds
                     const sColor = p.type === 'stratus' ? '200, 200, 200' : '100, 110, 120';
                     if (noise < 0.5) return;
                     ctx.fillStyle = `rgba(${sColor}, ${(noise - 0.5) * 0.3})`;
@@ -225,18 +234,59 @@
 
         // --- Weather Effects ---
         function createLightning() {
-            if (!activeCloudTypes.has('cumulonimbus') || Math.random() > 0.01) return;
-            let x = Math.random() * canvas.width;
-            let y = Math.random() * (canvas.height * 0.4);
+            if (!activeCloudTypes.has('cumulonimbus') || Math.random() > 0.015) return;
+
+            const cbParticles = particles.filter(p => p.type === 'cumulonimbus');
+            if (cbParticles.length < 2) return;
+
+            const strikeType = Math.random() > 0.4 ? 'ground' : 'cloud'; // 60% chance for cloud-to-ground
+            const startParticle = cbParticles[Math.floor(Math.random() * cbParticles.length)];
+
             ctx.save();
-            ctx.strokeStyle = 'rgba(255, 255, 224, 0.9)'; ctx.lineWidth = Math.random() * 5 + 1;
-            ctx.beginPath(); ctx.moveTo(x, y);
-            for (let i = 0; i < 15; i++) {
-                x += (Math.random() - 0.5) * 60; y += Math.random() * 40;
-                if (y > canvas.height) break;
-                ctx.lineTo(x, y);
+            ctx.strokeStyle = 'rgba(255, 255, 224, 0.9)';
+            ctx.lineWidth = Math.random() * 3 + 1;
+            ctx.beginPath();
+            ctx.moveTo(startParticle.x, startParticle.y);
+
+            if (strikeType === 'ground') {
+                let x = startParticle.x;
+                let y = startParticle.y;
+                const segments = 20;
+                for (let i = 0; i < segments; i++) {
+                    x += (Math.random() - 0.5) * 60;
+                    y += Math.random() * (canvas.height / segments) * 1.5;
+                    if (y > canvas.height) {
+                        y = canvas.height;
+                        ctx.lineTo(x, y);
+                        break;
+                    }
+                    ctx.lineTo(x, y);
+                }
+            } else { // Cloud-to-cloud strike
+                let endParticle;
+                do {
+                    endParticle = cbParticles[Math.floor(Math.random() * cbParticles.length)];
+                } while (endParticle === startParticle);
+
+                const segments = 10;
+                for (let i = 0; i < segments; i++) {
+                    const t = (i + 1) / segments;
+                    const targetX = startParticle.x + (endParticle.x - startParticle.x) * t;
+                    const targetY = startParticle.y + (endParticle.y - startParticle.y) * t;
+                    const offsetX = (Math.random() - 0.5) * 100;
+                    const offsetY = (Math.random() - 0.5) * 100;
+                    ctx.lineTo(targetX + offsetX, targetY + offsetY);
+                }
+                ctx.lineTo(endParticle.x, endParticle.y);
             }
-            ctx.stroke(); ctx.restore();
+            
+            ctx.stroke();
+
+            // Create a flash effect
+            ctx.fillStyle = `rgba(200, 200, 255, ${Math.random() * 0.3})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.restore();
         }
 
         // --- Initialization ---

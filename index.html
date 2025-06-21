@@ -18,7 +18,8 @@
             transition: transform 0.3s ease-in-out;
         }
         .controls.minimized .control-group,
-        .controls.minimized h2 {
+        .controls.minimized h2,
+        .controls.minimized #liveControl {
             display: none;
         }
         .controls.minimized {
@@ -54,6 +55,13 @@
         input[type="text"], select { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB; color: #374151;}
         input:disabled, select:disabled { background-color: #e5e7eb; cursor: not-allowed; }
         .status-message { font-weight: 500; margin-top: 10px; }
+        .live-data {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+            color: #000;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white">
@@ -126,7 +134,8 @@
             <label for="liveLocation">Location</label>
             <input type="text" id="liveLocation" value="Auckland, New Zealand">
             <button id="getWeatherBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition-colors mt-2">Get Current Weather</button>
-            <div id="status" class="status-message text-gray-700"></div>
+            <div id="status" class="status-message text-black"></div>
+            <div id="liveDataDisplay" class="live-data"></div>
         </div>
         
         <div class="control-group">
@@ -167,6 +176,7 @@
             liveLocation: document.getElementById('liveLocation'),
             getWeatherBtn: document.getElementById('getWeatherBtn'),
             status: document.getElementById('status'),
+            liveDataDisplay: document.getElementById('liveDataDisplay'),
             location: document.getElementById('location'),
             season: document.getElementById('season'),
             frontType: document.getElementById('frontType'),
@@ -175,7 +185,7 @@
             timeOfDay: document.getElementById('timeOfDay'),
         };
 
-        const API_KEY = 'MXQ95HC2CSTYM3JVSM2F63AC6'; // User-provided API key
+        const API_KEY = 'MXQ95HC2CSTYM3JVSM2F63AC6';
 
         let time = 0;
         const simplex = new SimplexNoise();
@@ -192,12 +202,13 @@
         }
         
         async function fetchAndSetWeather() {
-            if (API_KEY === 'YOUR_API_KEY_HERE') {
+            if (API_KEY === 'YOUR_API_KEY_HERE' || !API_KEY) {
                 controls.status.textContent = 'API Key required!'; controls.status.style.color = 'red'; return;
             }
             const location = controls.liveLocation.value;
             controls.status.textContent = `Fetching weather for ${location}...`;
             controls.status.style.color = 'inherit';
+            controls.liveDataDisplay.innerHTML = '';
             
             const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/today?unitGroup=metric&include=current&key=${API_KEY}&contentType=json`;
 
@@ -208,7 +219,23 @@
                 const conditions = data.currentConditions;
 
                 controls.status.textContent = `${conditions.conditions} in ${data.resolvedAddress}`;
+                controls.liveDataDisplay.innerHTML = `
+                    <p><b>Temperature:</b> ${conditions.temp}°C</p>
+                    <p><b>Feels Like:</b> ${conditions.feelslike}°C</p>
+                    <p><b>Humidity:</b> ${conditions.humidity}%</p>
+                    <p><b>Wind:</b> ${conditions.windspeed} kph</p>
+                `;
+                
                 controls.speed.value = conditions.windspeed || 0;
+
+                const { datetimeEpoch, sunriseEpoch, sunsetEpoch } = conditions;
+                const daylightDuration = sunsetEpoch - sunriseEpoch;
+                if (daylightDuration > 0) {
+                    const timeSinceSunrise = datetimeEpoch - sunriseEpoch;
+                    let timeOfDayValue = timeSinceSunrise / daylightDuration;
+                    controls.timeOfDay.value = Math.max(0, Math.min(1, timeOfDayValue));
+                }
+
                 mapApiToClouds(conditions);
                 initParticles();
 
@@ -249,34 +276,34 @@
                 let timelines = {};
                 switch(location) {
                     case 'auckland, new zealand':
-                        timelines.Winter = [ { types: new Set(['cirrus', 'cumulus']), duration: 10000, desc: "Changeable winter sky with passing showers." }, { types: new Set(['cumulus', 'altocumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1500}, ];
-                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 9000, desc: "Classic 'puffy' fair-weather clouds." }, { types: new Set(['cirrus']), duration: 4000 }];
+                        timelines.Winter = [ { types: new Set(['cirrus', 'cumulus']), duration: 10000 }, { types: new Set(['cumulus', 'altocumulus']), duration: 8000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1500}, ];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 9000 }, { types: new Set(['cirrus']), duration: 4000 }];
                         break;
                     case 'christchurch, new zealand':
-                        timelines.Winter = [ { types: new Set([]), duration: 6000, desc: "Clear, crisp, frosty winter sky." }, { types: new Set(['cirrus']), duration: 4000 }, { types: new Set(['stratus']), duration: 4000 }, ];
-                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 8000, desc: "Warm day with developing cumulus." }, { types: new Set(['cirrus', 'altocumulus']), duration: 5000 } ];
+                        timelines.Winter = [ { types: new Set([]), duration: 6000 }, { types: new Set(['cirrus']), duration: 4000 }, { types: new Set(['stratus']), duration: 4000 }, ];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 8000 }, { types: new Set(['cirrus', 'altocumulus']), duration: 5000 } ];
                         break;
                     case 'phoenix, usa':
-                        timelines.Summer = [ { types: new Set([]), duration: 10000, desc: "Hot, clear desert sky with a chance of a brief monsoon thunderstorm." }, { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1000 }, ];
-                        timelines.Winter = [ { types: new Set(['cirrostratus']), duration: 7000, desc: "Mild, high-cloud winter day." }, { types: new Set(['altocumulus']), duration: 5000 } ];
+                        timelines.Summer = [ { types: new Set([]), duration: 10000 }, { types: new Set(['cirrus']), duration: 3000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 1000 }, ];
+                        timelines.Winter = [ { types: new Set(['cirrostratus']), duration: 7000 }, { types: new Set(['altocumulus']), duration: 5000 } ];
                         break;
                     case 'london, uk':
-                        timelines.Winter = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 8000, desc: "Classic gloomy, overcast and drizzly winter weather." }, { types: new Set(['altostratus', 'cumulus']), duration: 6000 }, ];
-                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 7000, desc: "Fair weather with a chance of afternoon showers." }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, { types: new Set(['cirrus']), duration: 4000 }, ];
+                        timelines.Winter = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 8000 }, { types: new Set(['altostratus', 'cumulus']), duration: 6000 }, ];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 7000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2000 }, { types: new Set(['cirrus']), duration: 4000 }, ];
                         break;
                     case 'singapore':
-                        timelines.Summer = timelines.Winter = [ { types: new Set(['cumulus']), duration: 5000, desc: "Hot and humid, building to a daily tropical downpour." }, { types: new Set(['cumulonimbus']), rain: true, duration: 5000 }, ];
+                        timelines.Summer = timelines.Winter = [ { types: new Set(['cumulus']), duration: 5000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 5000 }, ];
                         break;
                     case 'cape town, south africa':
-                        timelines.Winter = [ { types: new Set(['cirrostratus']), duration: 4000, desc: "Cool, rainy winter season with approaching fronts." }, { types: new Set(['nimbostratus']), rain: true, duration: 6000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
-                        timelines.Summer = [ { types: new Set([]), duration: 9000, desc: "Hot, dry, and clear summer." }, { types: new Set(['cirrus', 'cumulus']), duration: 4000 } ];
+                        timelines.Winter = [ { types: new Set(['cirrostratus']), duration: 4000 }, { types: new Set(['nimbostratus']), rain: true, duration: 6000 }, { types: new Set(['cumulus']), duration: 4000 }, ];
+                        timelines.Summer = [ { types: new Set([]), duration: 9000 }, { types: new Set(['cirrus', 'cumulus']), duration: 4000 } ];
                         break;
                     case 'toronto, canada':
-                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 6000, desc: "Warm, humid summer day with risk of thunderstorms." }, { types: new Set(['cumulonimbus']), rain: true, duration: 2500 }, { types: new Set(['altocumulus']), duration: 4000 }, ];
-                        timelines.Winter = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 10000, desc: "Overcast and snowy." }];
+                        timelines.Summer = [ { types: new Set(['cumulus']), duration: 6000 }, { types: new Set(['cumulonimbus']), rain: true, duration: 2500 }, { types: new Set(['altocumulus']), duration: 4000 }, ];
+                        timelines.Winter = [ { types: new Set(['stratus', 'nimbostratus']), rain: true, duration: 10000 }];
                         break;
                     case 'santa barbara, usa':
-                        timelines.Summer = [ { types: new Set(['stratus']), duration: 3000, desc: "Classic 'June Gloom' morning fog that burns off." }, { types: new Set([]), duration: 9000 }, { types: new Set(['cirrus']), duration: 2000 }, ];
+                        timelines.Summer = [ { types: new Set(['stratus']), duration: 3000 }, { types: new Set([]), duration: 9000 }, { types: new Set(['cirrus']), duration: 2000 }, ];
                         timelines.Winter = [ { types: new Set(['cirrus', 'altostratus']), duration: 6000 }, { types: new Set(['nimbostratus']), rain: true, duration: 4000 }, ];
                         break;
                     default:
@@ -360,6 +387,11 @@
             controls.frontControl.classList.toggle('hidden', mode !== 'front');
             controls.liveControl.classList.toggle('hidden', mode !== 'live');
             controls.weatherSpeed.disabled = (mode === 'live');
+            controls.timeOfDay.disabled = (mode === 'live');
+            if (mode !== 'live') {
+                controls.status.textContent = '';
+                controls.liveDataDisplay.innerHTML = '';
+            }
             init();
         }
         
@@ -373,7 +405,7 @@
         controls.season.addEventListener('change', init);
         controls.frontType.addEventListener('change', init);
         controls.getWeatherBtn.addEventListener('click', fetchAndSetWeather);
-        controls.timeOfDay.addEventListener('input', () => drawScene()); 
+        controls.timeOfDay.addEventListener('input', () => { if(controls.simMode.value !== 'live') drawScene(); }); 
         controls.toggleBtn.addEventListener('click', toggleControls);
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; cloudBuffer.width = canvas.width; cloudBuffer.height = canvas.height; init(); });
         

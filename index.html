@@ -163,8 +163,8 @@
         </div>
 
         <div class="control-group">
-            <label for="windSpeed">Wind Speed</label>
-            <input type="range" id="windSpeed" min="-5" max="5" value="0.8" step="0.1" class="w-full">
+            <label for="windSpeed">Wind Speed (kph)</label>
+            <input type="range" id="windSpeed" min="-50" max="50" value="8" step="1" class="w-full">
         </div>
         
         <div class="control-group">
@@ -215,62 +215,10 @@
         const ALTITUDE = { HIGH_TOP: 0, HIGH_BASE: 0.35, MID_TOP: 0.35, MID_BASE: 0.65, LOW_TOP: 0.65, LOW_BASE: 1.0, };
 
         class Particle {
-            constructor(type) {
-                this.type = type;
-                this.reset();
-                this.texture = null;
-            }
-            reset() {
-                this.x = Math.random() * canvas.width;
-                this.setAltitude();
-                this.extra = { 
-                    radius: 50 + Math.random() * 80, 
-                    seed: { x: Math.random() * 1000, y: Math.random() * 1000, z: Math.random() * 1000 }
-                };
-
-                if (this.type === 'rain') {
-                    const cnbParticles = particles.filter(p => p.type === 'cumulonimbus');
-                    if (cnbParticles.length > 0) {
-                        const parent = cnbParticles[Math.floor(Math.random() * cnbParticles.length)];
-                        this.x = parent.x + (Math.random() - 0.5) * parent.extra.radius;
-                        this.y = parent.y + parent.extra.radius * 0.5;
-                    } else if (weatherSystem.activeClouds.has('nimbostratus')) {
-                        this.y = (ALTITUDE.MID_BASE + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_BASE)) * canvas.height;
-                    } else {
-                         // Hide rain if no rain clouds are present
-                        this.y = canvas.height + 20;
-                    }
-                    this.extra.speed = Math.random() * 5 + 5;
-                }
-            }
-            setAltitude(){
-                 switch (this.type) {
-                    case 'cirrus': this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height; break;
-                    case 'altocumulus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height; break;
-                    case 'cumulus': this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height; break;
-                    case 'cumulonimbus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height; break;
-                    // Rain altitude is set in reset()
-                    default: if (this.type !== 'rain') { this.y = Math.random() * canvas.height; }
-                }
-            }
-            update() {
-                if(this.type === 'rain') {
-                    this.y += this.extra.speed;
-                    this.x += parseFloat(controls.speed.value);
-                    if(this.y > canvas.height) this.reset();
-                    return;
-                }
-                const wind = parseFloat(controls.speed.value);
-                let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time);
-                let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100);
-                let windFactor = 1;
-                switch (this.type) { case 'cirrus': windFactor = 2; break; }
-                this.x += (wind * windFactor) + noiseX;
-                if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) { this.y += noiseY * 0.5; }
-                if (this.x > canvas.width + 250) this.x = -250;
-                if (this.x < -250) this.x = canvas.width + 250;
-                if (this.y > canvas.height + 250 || this.y < -250) this.setAltitude();
-            }
+            constructor(type) { this.type = type; this.reset(); this.texture = null; }
+            reset() { this.x = Math.random() * canvas.width; this.setAltitude(); this.extra = { radius: 50 + Math.random() * 80, seed: { x: Math.random() * 1000, y: Math.random() * 1000, z: Math.random() * 1000} }; if(this.type === 'rain') { const cnbParticles = particles.filter(p => p.type === 'cumulonimbus'); if (cnbParticles.length > 0) { const parent = cnbParticles[Math.floor(Math.random() * cnbParticles.length)]; this.x = parent.x + (Math.random() - 0.5) * parent.extra.radius; this.y = parent.y + parent.extra.radius * 0.5; } else if (weatherSystem.activeClouds.has('nimbostratus')) { this.y = (ALTITUDE.MID_BASE + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_BASE)) * canvas.height; } else { this.y = canvas.height + 20; } this.extra.speed = Math.random() * 5 + 5; } }
+            setAltitude(){ switch (this.type) { case 'cirrus': this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height; break; case 'altocumulus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height; break; case 'cumulus': this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height; break; case 'cumulonimbus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height; break; default: if (this.type !== 'rain') { this.y = Math.random() * canvas.height; } } }
+            update() { if(this.type === 'rain') { this.y += this.extra.speed; this.x += (parseFloat(controls.speed.value) / 5); if(this.y > canvas.height) this.reset(); return; } const wind = parseFloat(controls.speed.value) / 10; let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time); let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100); let windFactor = 1; switch (this.type) { case 'cirrus': windFactor = 2; break; } this.x += (wind * windFactor) + noiseX; if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) { this.y += noiseY * 0.5; } if (this.x > canvas.width + 250) this.x = -250; if (this.x < -250) this.x = canvas.width + 250; if (this.y > canvas.height + 250 || this.y < -250) this.setAltitude(); }
         }
         
         async function fetchAndSetWeather() {
@@ -286,7 +234,13 @@
                 const data = await response.json();
                 const conditions = data.currentConditions;
                 controls.status.textContent = `${conditions.conditions} in ${data.resolvedAddress}`;
-                controls.liveDataDisplay.innerHTML = `<p><b>Temperature:</b> ${conditions.temp}°C</p><p><b>Feels Like:</b> ${conditions.feelslike}°C</p><p><b>Humidity:</b> ${conditions.humidity}%</p><p><b>Wind:</b> ${conditions.windspeed} kph</p>`;
+                controls.liveDataDisplay.innerHTML = `
+                    <p><b>Time:</b> ${conditions.datetime.substring(0,5)} (${data.timezone})</p>
+                    <p><b>Temperature:</b> ${conditions.temp}°C</p>
+                    <p><b>Feels Like:</b> ${conditions.feelslike}°C</p>
+                    <p><b>Humidity:</b> ${conditions.humidity}%</p>
+                    <p><b>Wind:</b> ${conditions.windspeed} kph</p>
+                `;
                 controls.speed.value = conditions.windspeed || 0;
                 const { datetimeEpoch, sunriseEpoch, sunsetEpoch } = conditions;
                 const daylightDuration = sunsetEpoch - sunriseEpoch;

@@ -19,7 +19,8 @@
         }
         .controls.minimized .control-group,
         .controls.minimized h2,
-        .controls.minimized #liveControl {
+        .controls.minimized #liveControl,
+        .controls.minimized #manualControl {
             display: none;
         }
         .controls.minimized {
@@ -52,6 +53,8 @@
              border-radius: 10px;
         }
         label { display: block; font-weight: 500; margin-bottom: 5px; color: #374151; }
+        .checkbox-label { display: flex; align-items: center; color: #374151; margin-bottom: 8px; font-weight: normal;}
+        .checkbox-label input { margin-right: 8px; }
         input[type="text"], select { width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #D1D5DB; color: #374151;}
         input:disabled, select:disabled { background-color: #e5e7eb; cursor: not-allowed; }
         .status-message { font-weight: 500; margin-top: 10px; }
@@ -79,6 +82,7 @@
                 <option value="location">Location Simulation</option>
                 <option value="front">Weather Front</option>
                 <option value="live">Live Weather</option>
+                <option value="manual">Manual Selection</option>
             </select>
         </div>
 
@@ -137,6 +141,21 @@
             <div id="status" class="status-message text-black"></div>
             <div id="liveDataDisplay" class="live-data"></div>
         </div>
+
+        <div id="manualControl" class="control-group hidden">
+            <label>Cloud Types</label>
+            <div class="grid grid-cols-2 gap-x-4">
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cumulus" checked> Cumulus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="stratus"> Stratus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cirrus"> Cirrus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cumulonimbus"> Cumulonimbus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cirrocumulus"> Cirrocumulus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="cirrostratus"> Cirrostratus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="altocumulus"> Altocumulus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="altostratus"> Altostratus</label>
+                <label class="checkbox-label"><input type="checkbox" name="cloud-type" value="nimbostratus"> Nimbostratus</label>
+            </div>
+        </div>
         
         <div class="control-group">
             <label for="weatherSpeed">Weather Progression Speed</label>
@@ -173,6 +192,7 @@
             locationControl: document.getElementById('locationControl'),
             frontControl: document.getElementById('frontControl'),
             liveControl: document.getElementById('liveControl'),
+            manualControl: document.getElementById('manualControl'),
             liveLocation: document.getElementById('liveLocation'),
             getWeatherBtn: document.getElementById('getWeatherBtn'),
             status: document.getElementById('status'),
@@ -207,7 +227,7 @@
             }
             const location = controls.liveLocation.value;
             controls.status.textContent = `Fetching weather for ${location}...`;
-            controls.status.style.color = ''; // Reset color to let CSS class take over
+            controls.status.style.color = '';
             controls.liveDataDisplay.innerHTML = '';
             
             const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/today?unitGroup=metric&include=current&key=${API_KEY}&contentType=json`;
@@ -317,7 +337,7 @@
         }
         
         function updateWeather(deltaTime) { 
-            if (controls.simMode.value === 'live') return;
+            if (controls.simMode.value === 'live' || controls.simMode.value === 'manual') return;
             weatherSystem.progress += deltaTime * parseFloat(controls.weatherSpeed.value); const totalDuration = weatherSystem.timeline.reduce((sum, stage) => sum + stage.duration, 0); if (totalDuration > 0 && weatherSystem.progress > totalDuration) { weatherSystem.progress %= totalDuration; } updateActiveClouds(); 
         }
         function updateActiveClouds() { let currentTime = 0; let currentStage = null; let nextStage = null; let timeIntoStage = 0; if (weatherSystem.timeline.length === 0) return; for(let i=0; i< weatherSystem.timeline.length; i++) { const stage = weatherSystem.timeline[i]; if(currentTime + stage.duration > weatherSystem.progress) { currentStage = stage; nextStage = weatherSystem.timeline[(i + 1) % weatherSystem.timeline.length]; timeIntoStage = weatherSystem.progress - currentTime; break; } currentTime += stage.duration; } if(!currentStage) { currentStage = weatherSystem.timeline[0]; timeIntoStage=0; } const transitionDuration = 1000; const allTypes = new Set([...(currentStage ? currentStage.types : []), ...(nextStage ? nextStage.types : [])]); const oldClouds = new Map(weatherSystem.activeClouds); weatherSystem.activeClouds.clear(); allTypes.forEach(type => { const inCurrent = currentStage && currentStage.types.has(type); const inNext = nextStage && nextStage.types.has(type); let density = 0; if (inCurrent && !inNext) { density = 1.0 - Math.min(1, timeIntoStage / transitionDuration); } else if (!inCurrent && inNext) { density = Math.min(1, Math.max(0, timeIntoStage - (currentStage.duration - transitionDuration)) / transitionDuration); } else if (inCurrent && inNext) { density = 1.0; } if (density > 0) { weatherSystem.activeClouds.set(type, density); } }); const newCloudSet = new Set(weatherSystem.activeClouds.keys()); const oldCloudSet = new Set(oldClouds.keys()); if (JSON.stringify([...newCloudSet]) !== JSON.stringify([...oldCloudSet])) { initParticles(); } }
@@ -364,6 +384,13 @@
             const mode = controls.simMode.value;
             if (mode === 'live') {
                 fetchAndSetWeather();
+            } else if (mode === 'manual') {
+                weatherSystem.activeClouds.clear();
+                const checkedTypes = document.querySelectorAll('input[name="cloud-type"]:checked');
+                checkedTypes.forEach(cb => {
+                    weatherSystem.activeClouds.set(cb.value, 1.0);
+                });
+                initParticles();
             } else {
                 setupWeatherSystem();
             }
@@ -386,8 +413,11 @@
             controls.locationControl.classList.toggle('hidden', mode !== 'location');
             controls.frontControl.classList.toggle('hidden', mode !== 'front');
             controls.liveControl.classList.toggle('hidden', mode !== 'live');
-            controls.weatherSpeed.disabled = (mode === 'live');
+            controls.manualControl.classList.toggle('hidden', mode !== 'manual');
+            
+            controls.weatherSpeed.disabled = (mode === 'live' || mode === 'manual');
             controls.timeOfDay.disabled = (mode === 'live');
+            
             if (mode !== 'live') {
                 controls.status.textContent = '';
                 controls.liveDataDisplay.innerHTML = '';
@@ -404,6 +434,7 @@
         controls.location.addEventListener('change', init);
         controls.season.addEventListener('change', init);
         controls.frontType.addEventListener('change', init);
+        controls.manualControl.addEventListener('change', init);
         controls.getWeatherBtn.addEventListener('click', fetchAndSetWeather);
         controls.timeOfDay.addEventListener('input', () => { if(controls.simMode.value !== 'live') drawScene(); }); 
         controls.toggleBtn.addEventListener('click', toggleControls);
@@ -414,3 +445,4 @@
     </script>
 </body>
 </html>
+

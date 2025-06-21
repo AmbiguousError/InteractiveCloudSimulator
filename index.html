@@ -164,7 +164,7 @@
 
         <div class="control-group">
             <label for="windSpeed">Wind Speed</label>
-            <input type="range" id="windSpeed" min="-20" max="20" value="0.8" step="0.1" class="w-full">
+            <input type="range" id="windSpeed" min="-5" max="5" value="0.8" step="0.1" class="w-full">
         </div>
         
         <div class="control-group">
@@ -215,39 +215,79 @@
         const ALTITUDE = { HIGH_TOP: 0, HIGH_BASE: 0.35, MID_TOP: 0.35, MID_BASE: 0.65, LOW_TOP: 0.65, LOW_BASE: 1.0, };
 
         class Particle {
-            constructor(type) { this.type = type; this.reset(); this.texture = null; }
-            reset() { this.x = Math.random() * canvas.width; this.setAltitude(); this.extra = { radius: 50 + Math.random() * 80, seed: { x: Math.random() * 1000, y: Math.random() * 1000, z: Math.random() * 1000} }; if(this.type === 'rain') { this.y = Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height + ALTITUDE.LOW_TOP * canvas.height; this.extra.speed = Math.random() * 5 + 5; } }
-            setAltitude(){ switch (this.type) { case 'cirrus': this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height; break; case 'altocumulus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height; break; case 'cumulus': this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height; break; case 'cumulonimbus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height; break; default: this.y = Math.random() * canvas.height; } }
-            update() { if(this.type === 'rain') { this.y += this.extra.speed; this.x += parseFloat(controls.speed.value) * 0.5; if(this.y > canvas.height) this.reset(); return; } const wind = parseFloat(controls.speed.value); let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time); let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100); let windFactor = 1; switch (this.type) { case 'cirrus': windFactor = 2; break; } this.x += (wind * windFactor) + noiseX; if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) { this.y += noiseY * 0.5; } if (this.x > canvas.width + 250) this.x = -250; if (this.x < -250) this.x = canvas.width + 250; if (this.y > canvas.height + 250 || this.y < -250) this.setAltitude(); }
+            constructor(type) {
+                this.type = type;
+                this.reset();
+                this.texture = null;
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.setAltitude();
+                this.extra = { 
+                    radius: 50 + Math.random() * 80, 
+                    seed: { x: Math.random() * 1000, y: Math.random() * 1000, z: Math.random() * 1000 }
+                };
+
+                if (this.type === 'rain') {
+                    const cnbParticles = particles.filter(p => p.type === 'cumulonimbus');
+                    if (cnbParticles.length > 0) {
+                        const parent = cnbParticles[Math.floor(Math.random() * cnbParticles.length)];
+                        this.x = parent.x + (Math.random() - 0.5) * parent.extra.radius;
+                        this.y = parent.y + parent.extra.radius * 0.5;
+                    } else if (weatherSystem.activeClouds.has('nimbostratus')) {
+                        this.y = (ALTITUDE.MID_BASE + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_BASE)) * canvas.height;
+                    } else {
+                         // Hide rain if no rain clouds are present
+                        this.y = canvas.height + 20;
+                    }
+                    this.extra.speed = Math.random() * 5 + 5;
+                }
+            }
+            setAltitude(){
+                 switch (this.type) {
+                    case 'cirrus': this.y = ALTITUDE.HIGH_TOP * canvas.height + Math.random() * (ALTITUDE.HIGH_BASE - ALTITUDE.HIGH_TOP) * canvas.height; break;
+                    case 'altocumulus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.MID_BASE - ALTITUDE.MID_TOP) * canvas.height; break;
+                    case 'cumulus': this.y = ALTITUDE.LOW_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.LOW_TOP) * canvas.height; break;
+                    case 'cumulonimbus': this.y = ALTITUDE.MID_TOP * canvas.height + Math.random() * (ALTITUDE.LOW_BASE - ALTITUDE.MID_TOP) * canvas.height; break;
+                    // Rain altitude is set in reset()
+                    default: if (this.type !== 'rain') { this.y = Math.random() * canvas.height; }
+                }
+            }
+            update() {
+                if(this.type === 'rain') {
+                    this.y += this.extra.speed;
+                    this.x += parseFloat(controls.speed.value);
+                    if(this.y > canvas.height) this.reset();
+                    return;
+                }
+                const wind = parseFloat(controls.speed.value);
+                let noiseX = simplex.noise3D(this.x / 800, this.y / 800, time);
+                let noiseY = simplex.noise3D(this.x / 500, this.y / 500, time + 100);
+                let windFactor = 1;
+                switch (this.type) { case 'cirrus': windFactor = 2; break; }
+                this.x += (wind * windFactor) + noiseX;
+                if (['cumulus', 'cumulonimbus', 'altocumulus'].includes(this.type)) { this.y += noiseY * 0.5; }
+                if (this.x > canvas.width + 250) this.x = -250;
+                if (this.x < -250) this.x = canvas.width + 250;
+                if (this.y > canvas.height + 250 || this.y < -250) this.setAltitude();
+            }
         }
         
         async function fetchAndSetWeather() {
-            if (API_KEY === 'YOUR_API_KEY_HERE' || !API_KEY) {
-                controls.status.textContent = 'API Key required!'; controls.status.style.color = 'red'; return;
-            }
+            if (API_KEY === 'YOUR_API_KEY_HERE' || !API_KEY) { controls.status.textContent = 'API Key required!'; controls.status.style.color = 'red'; return; }
             const location = controls.liveLocation.value;
             controls.status.textContent = `Fetching weather for ${location}...`;
             controls.status.style.color = '';
             controls.liveDataDisplay.innerHTML = '';
-            
             const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${encodeURIComponent(location)}/today?unitGroup=metric&include=current&key=${API_KEY}&contentType=json`;
-
             try {
                 const response = await fetch(url);
                 if (!response.ok) { throw new Error(`Weather API Error: ${response.statusText}`); }
                 const data = await response.json();
                 const conditions = data.currentConditions;
-
                 controls.status.textContent = `${conditions.conditions} in ${data.resolvedAddress}`;
-                controls.liveDataDisplay.innerHTML = `
-                    <p><b>Temperature:</b> ${conditions.temp}°C</p>
-                    <p><b>Feels Like:</b> ${conditions.feelslike}°C</p>
-                    <p><b>Humidity:</b> ${conditions.humidity}%</p>
-                    <p><b>Wind:</b> ${conditions.windspeed} kph</p>
-                `;
-                
+                controls.liveDataDisplay.innerHTML = `<p><b>Temperature:</b> ${conditions.temp}°C</p><p><b>Feels Like:</b> ${conditions.feelslike}°C</p><p><b>Humidity:</b> ${conditions.humidity}%</p><p><b>Wind:</b> ${conditions.windspeed} kph</p>`;
                 controls.speed.value = conditions.windspeed || 0;
-
                 const { datetimeEpoch, sunriseEpoch, sunsetEpoch } = conditions;
                 const daylightDuration = sunsetEpoch - sunriseEpoch;
                 if (daylightDuration > 0) {
@@ -255,13 +295,9 @@
                     let timeOfDayValue = timeSinceSunrise / daylightDuration;
                     controls.timeOfDay.value = Math.max(0, Math.min(1, timeOfDayValue));
                 }
-
                 mapApiToClouds(conditions);
                 initParticles();
-
-            } catch (error) {
-                controls.status.textContent = `Error: ${error.message}`; controls.status.style.color = 'red';
-            }
+            } catch (error) { controls.status.textContent = `Error: ${error.message}`; controls.status.style.color = 'red'; }
         }
 
         function mapApiToClouds(conditions) {
@@ -353,17 +389,16 @@
             bufferCtx.clearRect(0, 0, canvas.width, canvas.height);
             particles.sort((a,b) => a.y - b.y);
             drawSheetClouds(bufferCtx);
-            for (const p of particles) { drawParticle(p, bufferCtx); }
+            for (const p of particles) { if(p.type !== 'rain') drawParticle(p, bufferCtx); }
             drawCrepuscularRays(ctx, sunX, sunY);
             ctx.drawImage(cloudBuffer, 0, 0);
-            particles.forEach(p => { if (p.type === 'rain') drawParticle(p, ctx) });
+            for (const p of particles) { if(p.type === 'rain') drawParticle(p, ctx); }
         }
 
         function drawSky(targetCtx, sunX, sunY) { const sunHeight = Math.sin(lighting.sunAngle); const topSky = {r: 58, g: 99, b: 138}; const horizonSky = {r: 138, g: 182, b: 224}; const twilightSky = {r: 10, g: 20, b: 40}; const skyGradient = targetCtx.createRadialGradient(sunX, sunY, 0, sunX, sunY, canvas.width * 1.8); if(sunHeight > 0.05) { const mix = Math.pow(sunHeight, 0.5); const r = (twilightSky.r * (1-mix) + horizonSky.r * mix); const g = (twilightSky.g * (1-mix) + horizonSky.g * mix); const b = (twilightSky.b * (1-mix) + horizonSky.b * mix); skyGradient.addColorStop(0, `rgb(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b})`); skyGradient.addColorStop(0.05, `rgb(${r}, ${g}, ${b})`); skyGradient.addColorStop(0.6, `rgb(${topSky.r}, ${topSky.g}, ${topSky.b})`); } else { skyGradient.addColorStop(0, `rgb(${twilightSky.r}, ${twilightSky.g}, ${twilightSky.b})`); } targetCtx.fillStyle = skyGradient; targetCtx.fillRect(0, 0, canvas.width, canvas.height); }
         function drawCrepuscularRays(targetCtx, sunX, sunY) { const sunHeight = Math.sin(lighting.sunAngle); if (sunHeight > 0.6 || sunHeight < 0) return; const numRays = 70; targetCtx.save(); targetCtx.globalCompositeOperation = 'lighter'; for (let i = 0; i < numRays; i++) { const angle = (i / numRays) * Math.PI * 2; const length = canvas.width * 1.5; const endX = sunX + Math.cos(angle) * length; const endY = sunY + Math.sin(angle) * length; const rayGradient = targetCtx.createLinearGradient(sunX, sunY, endX, endY); const rayStrength = (Math.pow(1 - sunHeight, 3)) * (simplex.noise2D(i, time*0.1) * 0.5 + 0.5) * 0.1; rayGradient.addColorStop(0, `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, ${rayStrength})`); rayGradient.addColorStop(0.2, `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, 0)`); targetCtx.strokeStyle = rayGradient; targetCtx.lineWidth = Math.random() * 20 + 5; targetCtx.beginPath(); targetCtx.moveTo(sunX, sunY); targetCtx.lineTo(endX, endY); targetCtx.stroke(); } targetCtx.restore(); }
         function generateCloudTexture(particle, width, height) { const bufferCanvas = document.createElement('canvas'); bufferCanvas.width = width; bufferCanvas.height = height; const bufferCtx = bufferCanvas.getContext('2d'); const bufferData = bufferCtx.createImageData(width, height); const data = bufferData.data; const sunVecX = Math.cos(lighting.sunAngle); const sunVecY = -Math.sin(lighting.sunAngle); for(let y = 0; y < height; y++){ for(let x = 0; x < width; x++){ const i = (y * width + x) * 4; const u = x / width; const v = y / height; const u2 = u - 0.5; const v2 = v - 0.5; let dist = u2 * u2 + v2 * v2; if(dist > 0.25) continue; let density = simplex.noise3D(particle.extra.seed.x + u * 4, particle.extra.seed.y + v * 4, particle.extra.seed.z + time * 0.1) * 0.6; density += simplex.noise3D(particle.extra.seed.x + u * 8, particle.extra.seed.y + v * 8, particle.extra.seed.z + time * 0.1) * 0.3; density += simplex.noise3D(particle.extra.seed.x + u * 16, particle.extra.seed.y + v * 16, particle.extra.seed.z + time * 0.1) * 0.1; density -= dist * 2.0; if(density <= 0) continue; const alpha = density * 255; const lightAngle = (sunVecX * u2 + sunVecY * v2) * 2.0; const directLight = Math.max(0, lightAngle) * 1.5; const ambient = 1.0; let r = lighting.ambientColor.r * ambient + lighting.sunColor.r * directLight; let g = lighting.ambientColor.g * ambient + lighting.sunColor.g * directLight; let b = lighting.ambientColor.b * ambient + lighting.sunColor.b * directLight; data[i] = r; data[i+1] = g; data[i+2] = b; data[i+3] = alpha; }} bufferCtx.putImageData(bufferData, 0, 0); return bufferCanvas; }
         function drawParticle(p, targetCtx) {
-            // This particle type should be drawn directly to the main canvas
             if (p.type === 'rain') {
                 targetCtx.strokeStyle = `rgba(${lighting.ambientColor.r + 20}, ${lighting.ambientColor.g + 20}, ${lighting.ambientColor.b + 20}, 0.7)`; 
                 targetCtx.lineWidth = 1; 

@@ -234,13 +234,7 @@
                 const data = await response.json();
                 const conditions = data.currentConditions;
                 controls.status.textContent = `${conditions.conditions} in ${data.resolvedAddress}`;
-                controls.liveDataDisplay.innerHTML = `
-                    <p><b>Time:</b> ${conditions.datetime.substring(0,5)} (${data.timezone})</p>
-                    <p><b>Temperature:</b> ${conditions.temp}°C</p>
-                    <p><b>Feels Like:</b> ${conditions.feelslike}°C</p>
-                    <p><b>Humidity:</b> ${conditions.humidity}%</p>
-                    <p><b>Wind:</b> ${conditions.windspeed} kph</p>
-                `;
+                controls.liveDataDisplay.innerHTML = `<p><b>Time:</b> ${conditions.datetime.substring(0,5)} (${data.timezone})</p><p><b>Temperature:</b> ${conditions.temp}°C</p><p><b>Feels Like:</b> ${conditions.feelslike}°C</p><p><b>Humidity:</b> ${conditions.humidity}%</p><p><b>Wind:</b> ${conditions.windspeed} kph</p>`;
                 controls.speed.value = conditions.windspeed || 0;
                 const { datetimeEpoch, sunriseEpoch, sunsetEpoch } = conditions;
                 const daylightDuration = sunsetEpoch - sunriseEpoch;
@@ -351,7 +345,43 @@
 
         function drawSky(targetCtx, sunX, sunY) { const sunHeight = Math.sin(lighting.sunAngle); const topSky = {r: 58, g: 99, b: 138}; const horizonSky = {r: 138, g: 182, b: 224}; const twilightSky = {r: 10, g: 20, b: 40}; const skyGradient = targetCtx.createRadialGradient(sunX, sunY, 0, sunX, sunY, canvas.width * 1.8); if(sunHeight > 0.05) { const mix = Math.pow(sunHeight, 0.5); const r = (twilightSky.r * (1-mix) + horizonSky.r * mix); const g = (twilightSky.g * (1-mix) + horizonSky.g * mix); const b = (twilightSky.b * (1-mix) + horizonSky.b * mix); skyGradient.addColorStop(0, `rgb(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b})`); skyGradient.addColorStop(0.05, `rgb(${r}, ${g}, ${b})`); skyGradient.addColorStop(0.6, `rgb(${topSky.r}, ${topSky.g}, ${topSky.b})`); } else { skyGradient.addColorStop(0, `rgb(${twilightSky.r}, ${twilightSky.g}, ${twilightSky.b})`); } targetCtx.fillStyle = skyGradient; targetCtx.fillRect(0, 0, canvas.width, canvas.height); }
         function drawCrepuscularRays(targetCtx, sunX, sunY) { const sunHeight = Math.sin(lighting.sunAngle); if (sunHeight > 0.6 || sunHeight < 0) return; const numRays = 70; targetCtx.save(); targetCtx.globalCompositeOperation = 'lighter'; for (let i = 0; i < numRays; i++) { const angle = (i / numRays) * Math.PI * 2; const length = canvas.width * 1.5; const endX = sunX + Math.cos(angle) * length; const endY = sunY + Math.sin(angle) * length; const rayGradient = targetCtx.createLinearGradient(sunX, sunY, endX, endY); const rayStrength = (Math.pow(1 - sunHeight, 3)) * (simplex.noise2D(i, time*0.1) * 0.5 + 0.5) * 0.1; rayGradient.addColorStop(0, `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, ${rayStrength})`); rayGradient.addColorStop(0.2, `rgba(${lighting.sunColor.r}, ${lighting.sunColor.g}, ${lighting.sunColor.b}, 0)`); targetCtx.strokeStyle = rayGradient; targetCtx.lineWidth = Math.random() * 20 + 5; targetCtx.beginPath(); targetCtx.moveTo(sunX, sunY); targetCtx.lineTo(endX, endY); targetCtx.stroke(); } targetCtx.restore(); }
-        function generateCloudTexture(particle, width, height) { const bufferCanvas = document.createElement('canvas'); bufferCanvas.width = width; bufferCanvas.height = height; const bufferCtx = bufferCanvas.getContext('2d'); const bufferData = bufferCtx.createImageData(width, height); const data = bufferData.data; const sunVecX = Math.cos(lighting.sunAngle); const sunVecY = -Math.sin(lighting.sunAngle); for(let y = 0; y < height; y++){ for(let x = 0; x < width; x++){ const i = (y * width + x) * 4; const u = x / width; const v = y / height; const u2 = u - 0.5; const v2 = v - 0.5; let dist = u2 * u2 + v2 * v2; if(dist > 0.25) continue; let density = simplex.noise3D(particle.extra.seed.x + u * 4, particle.extra.seed.y + v * 4, particle.extra.seed.z + time * 0.1) * 0.6; density += simplex.noise3D(particle.extra.seed.x + u * 8, particle.extra.seed.y + v * 8, particle.extra.seed.z + time * 0.1) * 0.3; density += simplex.noise3D(particle.extra.seed.x + u * 16, particle.extra.seed.y + v * 16, particle.extra.seed.z + time * 0.1) * 0.1; density -= dist * 2.0; if(density <= 0) continue; const alpha = density * 255; const lightAngle = (sunVecX * u2 + sunVecY * v2) * 2.0; const directLight = Math.max(0, lightAngle) * 1.5; const ambient = 1.0; let r = lighting.ambientColor.r * ambient + lighting.sunColor.r * directLight; let g = lighting.ambientColor.g * ambient + lighting.sunColor.g * directLight; let b = lighting.ambientColor.b * ambient + lighting.sunColor.b * directLight; data[i] = r; data[i+1] = g; data[i+2] = b; data[i+3] = alpha; }} bufferCtx.putImageData(bufferData, 0, 0); return bufferCanvas; }
+        function generateCloudTexture(particle, width, height) {
+            const bufferCanvas = document.createElement('canvas'); bufferCanvas.width = width; bufferCanvas.height = height; const bufferCtx = bufferCanvas.getContext('2d'); const bufferData = bufferCtx.createImageData(width, height); const data = bufferData.data; const sunVecX = Math.cos(lighting.sunAngle); const sunVecY = -Math.sin(lighting.sunAngle);
+            for(let y = 0; y < height; y++){ for(let x = 0; x < width; x++){ const i = (y * width + x) * 4; const u = x / width; const v = y / height; const u2 = u - 0.5; const v2 = v - 0.5;
+                let dist = u2 * u2 + v2 * v2;
+
+                // Anvil shape for cumulonimbus
+                if (particle.type === 'cumulonimbus' && v < 0.3) {
+                    dist /= (1 + (0.3 - v) * 4);
+                }
+                if(dist > 0.25) continue;
+
+                let density = simplex.noise3D(particle.extra.seed.x + u * 4, particle.extra.seed.y + v * 4, particle.extra.seed.z + time * 0.1) * 0.6; density += simplex.noise3D(particle.extra.seed.x + u * 8, particle.extra.seed.y + v * 8, particle.extra.seed.z + time * 0.1) * 0.3; density += simplex.noise3D(particle.extra.seed.x + u * 16, particle.extra.seed.y + v * 16, particle.extra.seed.z + time * 0.1) * 0.1;
+                density -= dist * 2.0;
+
+                // Increase density for cumulonimbus
+                if (particle.type === 'cumulonimbus') {
+                    density *= 1.4;
+                }
+
+                if(density <= 0) continue;
+                const alpha = density * 255;
+                
+                const lightAngle = (sunVecX * u2 + sunVecY * v2) * 2.0;
+                const directLight = Math.max(0, lightAngle) * 1.5;
+                const ambient = 1.0;
+                
+                // Darken base of cumulonimbus
+                let darkness = (particle.type === 'cumulonimbus') ? Math.max(0, (v - 0.4) * 2) : 0;
+                
+                let r = lighting.ambientColor.r * ambient + lighting.sunColor.r * directLight - darkness * 80;
+                let g = lighting.ambientColor.g * ambient + lighting.sunColor.g * directLight - darkness * 80;
+                let b = lighting.ambientColor.b * ambient + lighting.sunColor.b * directLight - darkness * 80;
+                
+                data[i] = r; data[i+1] = g; data[i+2] = b; data[i+3] = alpha;
+            }}
+            bufferCtx.putImageData(bufferData, 0, 0); return bufferCanvas;
+        }
         function drawParticle(p, targetCtx) {
             if (p.type === 'rain') {
                 targetCtx.strokeStyle = `rgba(${lighting.ambientColor.r + 20}, ${lighting.ambientColor.g + 20}, ${lighting.ambientColor.b + 20}, 0.7)`; 
@@ -390,7 +420,7 @@
         
         function initParticles() {
             particles = [];
-            const typeCounts = { cumulus: 25, cirrus: 150, cumulonimbus: 10, altocumulus: 20 };
+            const typeCounts = { cumulus: 25, cirrus: 150, cumulonimbus: 15, altocumulus: 20 };
             weatherSystem.activeClouds.forEach((density, type) => {
                 const count = Math.ceil((typeCounts[type] || 0) * density);
                 for(let i=0; i < count; i++){ 

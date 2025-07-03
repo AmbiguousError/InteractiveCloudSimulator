@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climate Change: Data, Trends, and News</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-top: 1rem;
+        }
+        .mini-chart-container {
+            position: relative;
+            height: 100px;
+            margin-top: 1rem;
+        }
+        .prediction-chart-container {
+            position: relative;
+            height: 150px;
+        }
+        .control-btn {
+            transition: all 0.2s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            background-color: #E5E7EB;
+            color: #374151;
+        }
+        .control-btn.active {
+            background-color: #4F46E5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #E5E7EB;
+            border-bottom-color: #4F46E5;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 50;
+        }
+        .modal-content {
+            background-color: white; padding: 2rem; border-radius: 0.75rem; max-width: 90%; width: 600px; max-height: 80vh; overflow-y: auto;
+        }
+        /* Styles for expandable sections */
+        details > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+        details[open] summary .arrow-down {
+            transform: rotate(180deg);
+        }
+        .arrow-down {
+            transition: transform 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl sm:text-5xl font-bold text-gray-900">Climate Change Dashboard</h1>
+            <p class="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">Explore historical data, understand the science, simulate future scenarios, and see the latest news.</p>
+        </header>
+
+        <main class="space-y-16">
+            <!-- Economic Impacts Section -->
+            <section id="economic-impacts">
+                <h2 class="text-3xl font-bold text-center mb-8">The Projected Economic Cost of Climate Change</h2>
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div class="card p-6 text-center">
+                        <h3 class="text-xl font-semibold">Infrastructure Damage</h3>
+                        <p class="text-gray-600 text-sm">Annual cost from extreme weather</p>
+                        <div class="mini-chart-container"><canvas id="infraCostChart"></canvas></div>
+                        <button class="control-btn text-xs mt-4 mx-auto synopsis-trigger" data-synopsis-topic="Infrastructure Costs">Learn More</button>
+                    </div>
+                    <div class="card p-6 text-center">
+                        <h3 class="text-xl font-semibold">Agricultural Losses</h3>
+                        <p class="text-gray-600 text-sm">Annual losses in crop yields</p>
+                        <div class="mini-chart-container"><canvas id="agriCostChart"></canvas></div>
+                        <button class="control-btn text-xs mt-4 mx-auto synopsis-trigger" data-synopsis-topic="Agricultural Losses">Learn More</button>
+                    </div>
+                    <div class="card p-6 text-center">
+                        <h3 class="text-xl font-semibold">Healthcare Costs</h3>
+                        <p class="text-gray-600 text-sm">Annual direct health costs</p>
+                        <div class="mini-chart-container"><canvas id="healthCostChart"></canvas></div>
+                        <button class="control-btn text-xs mt-4 mx-auto synopsis-trigger" data-synopsis-topic="Healthcare Costs">Learn More</button>
+                    </div>
+                    <div class="card p-6 text-center">
+                        <h3 class="text-xl font-semibold">Productivity Loss</h3>
+                        <p class="text-gray-600 text-sm">Global GDP loss from heat stress</p>
+                        <div class="mini-chart-container"><canvas id="productivityCostChart"></canvas></div>
+                        <button class="control-btn text-xs mt-4 mx-auto synopsis-trigger" data-synopsis-topic="Productivity Loss">Learn More</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Detailed Charts Section -->
+            <section id="detailed-charts">
+                <h2 class="text-3xl font-bold text-center mb-8">In-Depth Data Visualizations</h2>
+                <div class="grid md:grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card p-6">
+                        <h3 class="text-xl font-semibold">800,000 Years of CO₂ History</h3>
+                        <p class="text-sm text-gray-600">The recent spike is unprecedented.</p>
+                        <div class="chart-container"><canvas id="longCo2Chart"></canvas></div>
+                        <button class="control-btn text-xs mt-4 mx-auto synopsis-trigger" data-synopsis-topic="CO2 History">Learn More</button>
+                    </div>
+                    <div class="card p-6">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-xl font-semibold">Electricity Generation Mix</h3>
+                            <select id="country-filter" class="p-2 border rounded-md bg-gray-50 text-sm">
+                                <!-- Options will be populated by JS -->
+                            </select>
+                        </div>
+                        <p class="text-sm text-gray-600">Share of fuels used for power plants (2023).</p>
+                        <div class="chart-container"><canvas id="energyMixChart"></canvas></div>
+                        <button class="control-btn text-xs mt-4 mx-auto synopsis-trigger" data-synopsis-topic="Energy Mix">Learn More</button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- NEW: Climate Fundamentals Section -->
+            <section id="climate-fundamentals">
+                <h2 class="text-3xl font-bold text-center mb-8">Climate Fundamentals Explained</h2>
+                <div class="space-y-6 max-w-4xl mx-auto">
+                     <details class="bg-white p-6 rounded-lg shadow-sm transition-all duration-300 ease-in-out">
+                        <summary class="flex justify-between items-center font-semibold text-xl text-gray-900">
+                            <span>Verifying Climate Claims: The Scientific Consensus</span>
+                            <svg class="w-6 h-6 text-gray-500 arrow-down" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="mt-4 text-gray-700 space-y-4">
+                            <p>The scientific consensus, based on overwhelming evidence, is that Earth's climate is warming at an unprecedented rate and that human activities are the primary driver. This conclusion is supported by numerous independent scientific organizations worldwide.</p>
+                            <h3 class="font-semibold text-lg mt-4">Key Verified Claims:</h3>
+                            <ul class="list-disc list-inside space-y-2 pl-2">
+                                <li><strong>Global Temperature Rise:</strong> The planet's average surface temperature has risen significantly since the late 19th century. The majority of this warming has occurred in the last few decades, with the 10 warmest years on record all occurring since 2010.</li>
+                                <li><strong>Greenhouse Gas Concentrations:</strong> The concentrations of greenhouse gases in the atmosphere have increased to levels not seen in at least 800,000 years.</li>
+                                <li><strong>Ocean Warming and Acidification:</strong> The oceans have absorbed much of the increased heat and CO2, leading to warming and acidification which threatens marine ecosystems.</li>
+                                <li><strong>Shrinking Ice Sheets and Glaciers:</strong> Ice sheets in Greenland and Antarctica are losing mass, and glaciers worldwide are retreating.</li>
+                                <li><strong>Sea Level Rise:</strong> Global sea levels are rising due to thermal expansion of seawater and melting ice.</li>
+                                <li><strong>Extreme Weather:</strong> Climate change is increasing the frequency and intensity of events like heatwaves, heavy rainfall, and droughts.</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="bg-white p-6 rounded-lg shadow-sm transition-all duration-300 ease-in-out">
+                        <summary class="flex justify-between items-center font-semibold text-xl text-gray-900">
+                            <span>Accuracy of Climate Predictions</span>
+                            <svg class="w-6 h-6 text-gray-500 arrow-down" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="mt-4 text-gray-700 space-y-4">
+                            <p>Climate models, while complex, have proven to be remarkably accurate in their long-term predictions.</p>
+                             <ul class="list-disc list-inside space-y-2 pl-2">
+                                <li><strong>Early Models:</strong> Models from the 1970s accurately predicted the current warming trend. For example, ExxonMobil's internal models from that era were highly skillful.</li>
+                                <li><strong>Modern Models:</strong> Today's sophisticated models consistently and accurately forecast the overall trend of global warming, though regional predictions have more uncertainty.</li>
+                                <li><strong>The Role of Scenarios:</strong> Models present different outcomes based on future emissions. So far, global emissions have tracked the higher-end scenarios, and observed warming has been consistent with those projections.</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="bg-white p-6 rounded-lg shadow-sm transition-all duration-300 ease-in-out" open>
+                        <summary class="flex justify-between items-center font-semibold text-xl text-gray-900">
+                            <span>Population Growth vs. Climate Impact</span>
+                            <svg class="w-6 h-6 text-gray-500 arrow-down" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <div class="mt-4 text-gray-700 space-y-4">
+                            <p>The number of people affected by extreme weather is rising due to both increasing event severity and global population growth, which places more people in vulnerable areas.</p>
+                            <div class="my-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                                <h3 class="font-semibold text-lg mb-2 text-center">Global Population & People Affected by Weather Disasters</h3>
+                                <div class="chart-container" style="height: 250px;"><canvas id="populationDisasterChart"></canvas></div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </section>
+
+            <!-- Prediction Simulation Section -->
+            <section id="simulation" class="bg-white p-8 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-center mb-4">Future Prediction Simulator</h2>
+                <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">Adjust the sliders to see how different emission scenarios could impact key climate metrics. The charts show the projected path from today to your selected year.</p>
+                <div class="grid lg:grid-cols-5 gap-8 items-start">
+                    <div class="lg:col-span-2 space-y-6">
+                        <div>
+                            <label for="year-slider" class="block text-lg font-medium">Prediction Year: <span id="year-value" class="font-bold text-indigo-600">2050</span></label>
+                            <input id="year-slider" type="range" min="2030" max="2100" value="2050" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2">
+                        </div>
+                        <div>
+                            <label for="emissions-slider" class="block text-lg font-medium">Emissions Scenario: <span id="emissions-label" class="font-bold text-indigo-600">Moderate</span></label>
+                            <input id="emissions-slider" type="range" min="1" max="3" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mt-2">
+                            <div class="flex flex-col text-sm text-gray-500 mt-1"><span>1: Low</span> <span>2: Moderate</span> <span>3: High</span></div>
+                        </div>
+                        <button id="generate-scenario-synopsis-btn" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Get AI Expert Synopsis</button>
+                    </div>
+                    <div class="lg:col-span-3 grid grid-cols-2 gap-4">
+                        <div class="card p-3"><h4 class="text-center font-semibold text-sm">Temperature Anomaly</h4><div class="prediction-chart-container"><canvas id="tempPredictionChart"></canvas></div></div>
+                        <div class="card p-3"><h4 class="text-center font-semibold text-sm">Sea Level Rise</h4><div class="prediction-chart-container"><canvas id="seaPredictionChart"></canvas></div></div>
+                        <div class="card p-3"><h4 class="text-center font-semibold text-sm">Heatwave Increase</h4><div class="prediction-chart-container"><canvas id="heatwavePredictionChart"></canvas></div></div>
+                        <div class="card p-3"><h4 class="text-center font-semibold text-sm">Storm Intensity</h4><div class="prediction-chart-container"><canvas id="stormPredictionChart"></canvas></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- News Feed Section -->
+            <section id="news">
+                <h2 class="text-3xl font-bold text-center mb-8">Latest Climate News (via Gemini AI)</h2>
+                <div class="flex flex-col items-center gap-4 mb-8">
+                    <div id="news-categories" class="flex flex-wrap justify-center gap-2 sm:gap-4">
+                        <button data-category="Top Stories" class="control-btn active">Top Stories</button><button data-category="Extreme Weather" class="control-btn">Extreme Weather</button><button data-category="Policy & Activism" class="control-btn">Policy & Activism</button><button data-category="Scientific Research" class="control-btn">Science & Research</button>
+                    </div>
+                    <div id="news-date-ranges" class="flex flex-wrap justify-center gap-2 sm:gap-3">
+                        <button data-range="week" class="control-btn text-xs">Week</button><button data-range="month" class="control-btn text-xs">Month</button><button data-range="year" class="control-btn active text-xs">Year</button><button data-range="5y" class="control-btn text-xs">5 Years</button><button data-range="25y" class="control-btn text-xs">25 Years</button>
+                    </div>
+                </div>
+                <div id="news-feed-container" class="max-w-4xl mx-auto">
+                    <div id="news-loader" class="text-center"><div class="loader mx-auto"></div><p class="mt-4 text-gray-600">Fetching news...</p></div>
+                    <div id="news-feed" class="space-y-4"></div>
+                    <div id="news-error" class="hidden text-center text-red-500 mt-4"><p>Could not fetch news.</p></div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center mt-16 py-6 border-t"><p class="text-gray-600">Illustration by Gemini. Data from public sources (NOAA, NASA, IEA, EM-DAT). News powered by Google AI.</p></footer>
+
+        <div id="synopsis-modal" class="modal-overlay hidden"><div class="modal-content"><div class="flex justify-between items-center mb-4"><h3 id="modal-title" class="text-2xl font-bold">AI Expert Synopsis</h3><button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button></div><div id="synopsis-content" class="text-gray-700 space-y-4"></div></div></div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Chart Instances & Data ---
+        let energyMixChart, tempPredictionChart, seaPredictionChart, heatwavePredictionChart, stormPredictionChart;
+        const economicData = { labels: [2025, 2030, 2040, 2050, 2060, 2070, 2100], infra: { data: [0.8, 1.0, 1.5, 2.2, 3.5, 5.0, 12.0], color: '#EF4444', unit: 'Trillion USD' }, agri: { data: [0.4, 0.5, 0.7, 1.1, 1.8, 2.7, 7.5], color: '#F59E0B', unit: 'Trillion USD' }, health: { data: [0.004, 0.008, 0.02, 0.05, 0.1, 0.2, 0.5], color: '#3B82F6', unit: 'Trillion USD' }, productivity: { data: [0.5, 0.8, 1.5, 2.5, 4.0, 6.0, 15.0], color: '#8B5CF6', unit: '% GDP Loss' } };
+        const longCo2Data = { labels: [-800000, -600000, -400000, -200000, -10000, 1800, 1950, 2024], values: [180, 220, 190, 250, 260, 280, 310, 422] };
+        const oecdCountries = [ 'Australia', 'Austria', 'Belgium', 'Canada', 'Chile', 'Colombia', 'Costa Rica', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Ireland', 'Israel', 'Italy', 'Japan', 'Korea', 'Latvia', 'Lithuania', 'Luxembourg', 'Mexico', 'Netherlands', 'New Zealand', 'Norway', 'Poland', 'Portugal', 'Slovak Republic', 'Slovenia', 'Spain', 'Sweden', 'Switzerland', 'Türkiye', 'United Kingdom', 'United States' ];
+        const energyMixData = { labels: ['Coal', 'Gas', 'Hydro', 'Nuclear', 'Wind & Solar', 'Other'], World: [35.4, 22.7, 14.9, 9.1, 13.4, 4.5], China: [59.1, 3.4, 13.5, 4.9, 15.6, 3.5], USA: [19.5, 43.1, 5.7, 18.2, 14.5, 9.0], India: [74.2, 2.5, 9.4, 2.0, 9.9, 2.0], EU27: [12.4, 16.9, 11.4, 22.0, 27.0, 10.3], NewZealand: [3.5, 10.5, 56.5, 0, 22.5, 7.0], OECDAverage: [25.1, 28.3, 13.5, 17.5, 11.1, 4.5] };
+        oecdCountries.forEach(c => energyMixData[c.replace(/\s/g, '')] = energyMixData.OECDAverage);
+        
+        // NEW Data for Population vs. Disasters Chart
+        const populationDisasterData = {
+            labels: ['1980', '1985', '1990', '1995', '2000', '2005', '2010', '2015', '2020', '2024'],
+            population: [4.45, 4.85, 5.30, 5.72, 6.12, 6.51, 6.92, 7.35, 7.79, 8.1], // in billions
+            affected: [75, 90, 120, 150, 210, 240, 260, 300, 350, 380] // in millions
+        };
+
+        // --- Hardcoded Synopsis Texts ---
+        const synopsisTexts = {
+            'Infrastructure Costs': 'As climate change intensifies, so does the frequency and severity of extreme weather events. More powerful hurricanes and typhoons bring destructive winds and storm surges, while intense rainfall leads to widespread flooding. This damages and destroys critical infrastructure like roads, bridges, ports, and power grids. Furthermore, rising sea levels permanently threaten coastal communities, requiring costly protective measures like seawalls or managed retreat. Extreme heat can also buckle railway lines and strain energy networks, leading to failures. The cumulative cost of repairing, rebuilding, and adapting this infrastructure represents a multi-trillion dollar challenge for the global economy.',
+            'Agricultural Losses': 'Agriculture is exceptionally vulnerable to climate change. Droughts, driven by shifting rainfall patterns and higher temperatures, parch farmlands and reduce water availability for irrigation, leading to widespread crop failure. Conversely, extreme rainfall can cause floods that wipe out entire harvests. Rising temperatures also introduce heat stress for both crops and livestock, reducing yields and productivity. Pests and diseases are also migrating to new regions as the climate warms. These combined pressures threaten global food security and create immense financial volatility for farmers and the entire food supply chain.',
+            'Healthcare Costs': 'The link between climate change and human health is direct and multifaceted. Heatwaves are a primary driver of increased healthcare costs, leading to a surge in heatstroke, dehydration, and cardiovascular stress, particularly among the elderly and vulnerable. Worsening air quality, from factors like wildfire smoke and ground-level ozone formation in higher temperatures, exacerbates respiratory conditions like asthma. Additionally, warmer climates allow disease vectors like mosquitoes and ticks to expand their range, increasing the incidence of illnesses such as dengue fever, Zika, and Lyme disease. These factors place a growing strain on public health systems worldwide.',
+            'Productivity Loss': 'Rising global temperatures directly impact economic productivity, primarily through a phenomenon known as "heat stress." When it is too hot to work safely, especially in outdoor or non-air-conditioned environments, worker output declines. This heavily affects crucial sectors like agriculture, construction, and manufacturing. Workers are forced to take more breaks, work at a slower pace, or stop work entirely during the hottest parts of the day, leading to significant reductions in output. The International Labour Organization estimates that by 2030, the equivalent of over 80 million full-time jobs could be lost globally due to heat stress, translating to trillions of dollars in lost economic value.',
+            'CO2 History': 'For 800,000 years, atmospheric CO₂ levels naturally fluctuated between about 180 parts per million (ppm) during ice ages and 280 ppm during warmer interglacial periods. This data, primarily from air bubbles trapped in Antarctic ice cores, shows a clear, cyclical pattern that governed Earth\'s climate. However, since the Industrial Revolution began around 1850, human activities—mainly the burning of fossil fuels—have injected massive amounts of CO₂ into the atmosphere at an unprecedented rate. Levels have now skyrocketed past 420 ppm, a level not seen in millions of years. This abrupt, vertical spike breaks the natural cycle and is the primary driver of the rapid warming we are experiencing today.',
+            'Energy Mix': 'The electricity generation mix is a critical indicator of a country\'s contribution to climate change. Fossil fuels like coal and natural gas have historically dominated global energy production. When burned, they release large quantities of carbon dioxide, the main greenhouse gas. To combat climate change, a rapid transition to low-carbon energy sources is essential. This involves phasing out coal and reducing reliance on gas, while scaling up renewable energy sources like wind and solar power, which generate electricity with zero direct emissions. Hydropower and nuclear energy are also significant low-carbon sources that play a crucial role in decarbonizing the power grid and stabilizing the climate.'
+        };
+
+        // --- Chart Rendering ---
+        function createEconomicChart(canvasId, data, unit) { new Chart(document.getElementById(canvasId).getContext('2d'), { type: 'line', data: { labels: economicData.labels, datasets: [{ data: data.data, borderColor: data.color, fill: true, backgroundColor: `${data.color}33`, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: (v) => `${v}${unit.startsWith('T') ? 'T' : '%'}` } }, x: { ticks: { maxRotation: 0, minRotation: 0 } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.formattedValue} ${unit}` } } } } }); }
+        createEconomicChart('infraCostChart', economicData.infra, economicData.infra.unit); createEconomicChart('agriCostChart', economicData.agri, economicData.agri.unit); createEconomicChart('healthCostChart', economicData.health, economicData.health.unit); createEconomicChart('productivityCostChart', economicData.productivity, economicData.productivity.unit);
+        
+        new Chart(document.getElementById('longCo2Chart').getContext('2d'), { type: 'line', data: { labels: longCo2Data.labels, datasets: [{ label: 'CO₂ (ppm)', data: longCo2Data.values, borderColor: '#EF4444', tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { type: 'linear', ticks: { callback: (v) => v < 0 ? `${-v/1000}k` : v } } } } });
+
+        // NEW: Population vs. Disasters Chart
+        new Chart(document.getElementById('populationDisasterChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: populationDisasterData.labels,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: 'World Population (Billions)',
+                        data: populationDisasterData.population,
+                        borderColor: '#3B82F6',
+                        backgroundColor: '#3B82F6',
+                        yAxisID: 'y-population',
+                        tension: 0.1,
+                        fill: false
+                    },
+                    {
+                        type: 'bar',
+                        label: 'People Affected by Disasters (Millions)',
+                        data: populationDisasterData.affected,
+                        backgroundColor: '#F59E0B',
+                        borderColor: '#F59E0B',
+                        yAxisID: 'y-disasters'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    'y-population': {
+                        type: 'linear',
+                        position: 'left',
+                        title: { display: true, text: 'World Population (Billions)' },
+                        grid: { drawOnChartArea: false }
+                    },
+                    'y-disasters': {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: 'People Affected (Millions)' }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    const unit = context.dataset.yAxisID === 'y-population' ? ' Billion' : ' Million';
+                                    label += context.parsed.y + unit;
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- Rest of the JavaScript from the target file (Energy Mix, Simulator, News, Modal) ---
+        
+        // Energy Mix Chart
+        const countryFilter = document.getElementById('country-filter');
+        ['World', 'China', 'USA', 'India', 'EU27', 'NewZealand', ...oecdCountries].sort().forEach(c => {
+            const option = document.createElement('option');
+            option.value = c.replace(/\s/g, '');
+            option.textContent = c;
+            if (c === 'World') option.selected = true;
+            countryFilter.appendChild(option);
+        });
+
+        function renderEnergyMixChart(country) {
+            if (energyMixChart) energyMixChart.destroy();
+            energyMixChart = new Chart(document.getElementById('energyMixChart').getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: energyMixData.labels,
+                    datasets: [{
+                        data: energyMixData[country],
+                        backgroundColor: ['#1F2937', '#4B5563', '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B'],
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+        countryFilter.addEventListener('change', (e) => renderEnergyMixChart(e.target.value));
+        renderEnergyMixChart('World');
+
+        // Prediction Simulator
+        const yearSlider = document.getElementById('year-slider');
+        const emissionsSlider = document.getElementById('emissions-slider');
+        const yearValue = document.getElementById('year-value');
+        const emissionsLabel = document.getElementById('emissions-label');
+        const emissionsMap = { 1: 'Low', 2: 'Moderate', 3: 'High' };
+
+        function createPredictionChart(canvasId, label, color) {
+            return new Chart(document.getElementById(canvasId).getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ label, data: [], borderColor: color, tension: 0.4, fill: true, backgroundColor: `${color}33` }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { ticks: { maxRotation: 0, minRotation: 0, autoSkip: true, maxTicksLimit: 5 } } } }
+            });
+        }
+        tempPredictionChart = createPredictionChart('tempPredictionChart', 'Temp Anomaly (°C)', '#EF4444');
+        seaPredictionChart = createPredictionChart('seaPredictionChart', 'Sea Level Rise (cm)', '#3B82F6');
+        heatwavePredictionChart = createPredictionChart('heatwavePredictionChart', 'Heatwave Increase (%)', '#F59E0B');
+        stormPredictionChart = createPredictionChart('stormPredictionChart', 'Storm Intensity (%)', '#8B5CF6');
+
+        function updatePredictionCharts() {
+            const year = parseInt(yearSlider.value);
+            const emissions = parseInt(emissionsSlider.value);
+            emissionsLabel.textContent = emissionsMap[emissions];
+            yearValue.textContent = year;
+
+            const baseValues = { temp: 1.2, sea: 24, heatwave: 50, storm: 10 };
+            const multipliers = { 1: { temp: 0.015, sea: 0.2, heatwave: 0.8, storm: 0.3 }, 2: { temp: 0.025, sea: 0.4, heatwave: 1.5, storm: 0.6 }, 3: { temp: 0.04, sea: 0.7, heatwave: 2.5, storm: 1.0 } };
+
+            const currentYear = new Date().getFullYear();
+            const years = Array.from({ length: year - currentYear + 1 }, (_, i) => currentYear + i);
+            
+            function generateData(base, multiplier, years) {
+                return years.map((y, i) => parseFloat((base + (multiplier * i)).toFixed(2)));
+            }
+            
+            tempPredictionChart.data.labels = years;
+            tempPredictionChart.data.datasets[0].data = generateData(baseValues.temp, multipliers[emissions].temp, years);
+            seaPredictionChart.data.labels = years;
+            seaPredictionChart.data.datasets[0].data = generateData(baseValues.sea, multipliers[emissions].sea, years);
+            heatwavePredictionChart.data.labels = years;
+            heatwavePredictionChart.data.datasets[0].data = generateData(baseValues.heatwave, multipliers[emissions].heatwave, years);
+            stormPredictionChart.data.labels = years;
+            stormPredictionChart.data.datasets[0].data = generateData(baseValues.storm, multipliers[emissions].storm, years);
+
+            [tempPredictionChart, seaPredictionChart, heatwavePredictionChart, stormPredictionChart].forEach(c => c.update());
+        }
+
+        yearSlider.addEventListener('input', updatePredictionCharts);
+        emissionsSlider.addEventListener('input', updatePredictionCharts);
+        updatePredictionCharts();
+
+        // Modal Logic
+        const modal = document.getElementById('synopsis-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const synopsisContent = document.getElementById('synopsis-content');
+        const modalTitle = document.getElementById('modal-title');
+
+        function showModal(content, title = 'AI Expert Synopsis') {
+            modalTitle.textContent = title;
+            synopsisContent.innerHTML = content;
+            modal.classList.remove('hidden');
+        }
+        function hideModal() { modal.classList.add('hidden'); }
+        closeModalBtn.addEventListener('click', hideModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+
+        document.querySelectorAll('.synopsis-trigger').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const topic = btn.dataset.synopsisTopic;
+                const text = synopsisTexts[topic] || 'Synopsis not available.';
+                showModal(`<p>${text.replace(/\n/g, '</p><p>')}</p>`, topic);
+            });
+        });
+        
+        // AI Synopsis for Simulator
+        document.getElementById('generate-scenario-synopsis-btn').addEventListener('click', async () => {
+            const year = yearSlider.value;
+            const scenario = emissionsMap[emissionsSlider.value];
+            const prompt = `Provide an expert synopsis of the likely state of the world's climate and its major impacts on society in the year ${year} under a "${scenario}" greenhouse gas emissions scenario. Be concise and impactful.`;
+            
+            showModal('<div class="text-center"><div class="loader mx-auto"></div><p class="mt-4 text-gray-600">Generating AI synopsis...</p></div>', `Synopsis: ${year} - ${scenario} Scenario`);
+            
+            try {
+                // This is a placeholder for a real API call
+                await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+                const mockResponses = {
+                    Low: `In ${year}, under a Low emissions scenario, the world has made significant progress. Global temperature rise is stabilizing around 1.5°C. While extreme weather is more common than in the past, the worst impacts have been averted. Coastal cities are protected by significant adaptation investments, and the global economy is largely powered by renewable energy. Food and water security remain stable for most regions.`,
+                    Moderate: `In ${year}, under a Moderate emissions scenario, the impacts of climate change are undeniable. Global temperatures have surpassed 2°C, leading to frequent and intense heatwaves, droughts, and storms. Sea-level rise has displaced millions in low-lying coastal areas. Food production is strained, and water scarcity is a major issue in many regions, causing significant economic disruption and social unrest.`,
+                    High: `In ${year}, under a High emissions scenario, the world faces a severe climate crisis. Temperatures have soared past 3°C, triggering irreversible tipping points. Vast regions have become uninhabitable due to extreme heat and permanent drought. Global food systems are in crisis, and catastrophic flooding and storms are commonplace. The global economy is severely damaged, and mass migration and conflict over resources are widespread.`
+                };
+                showModal(`<p>${mockResponses[scenario]}</p>`, `Synopsis: ${year} - ${scenario} Scenario`);
+            } catch (error) {
+                showModal('<p class="text-red-500">Failed to generate AI synopsis. Please try again.</p>');
+            }
+        });
+
+        // News Feed Logic (placeholder)
+        const newsFeedContainer = document.getElementById('news-feed');
+        const newsLoader = document.getElementById('news-loader');
+        
+        async function fetchNews() {
+            newsLoader.style.display = 'block';
+            newsFeedContainer.innerHTML = '';
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+            newsLoader.style.display = 'none';
+            const mockArticle = `
+                <div class="card p-4 flex-row gap-4">
+                    <img src="https://placehold.co/100x100/E2E8F0/4A5568?text=News" class="w-24 h-24 rounded-md object-cover">
+                    <div class="flex-1">
+                        <h4 class="font-bold text-lg">UN Report Highlights Record Ocean Temperatures</h4>
+                        <p class="text-sm text-gray-600">A new report confirms last year saw the highest ocean surface temperatures in recorded history, leading to widespread coral bleaching and marine ecosystem stress. Scientists urge immediate action to curb emissions.</p>
+                        <a href="#" class="text-indigo-600 hover:underline text-sm font-semibold mt-2 inline-block">Read More &rarr;</a>
+                    </div>
+                </div>`;
+            newsFeedContainer.innerHTML = mockArticle.repeat(3);
+        }
+        document.querySelectorAll('#news-categories button, #news-date-ranges button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const parent = e.target.parentElement;
+                parent.querySelector('.active').classList.remove('active');
+                e.target.classList.add('active');
+                fetchNews();
+            });
+        });
+        fetchNews();
+    });
+    </script>
+</body>
+</html>
+
